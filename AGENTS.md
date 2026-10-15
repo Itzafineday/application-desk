@@ -32,11 +32,24 @@ This repo is meant to be public. Everything committed here is permanent.
   README); opened straight from disk, the sample data can't load.
 - Inside claude.ai, if the database isn't available, the page shows "This
   browser only" and works from its localStorage cache.
-- Deploying means publishing `public/index.html` to the existing artifact URL.
-  The URL is in the owner's local notes, not in this repo. Deploy only with the
-  owner's OK, and leave the stored capabilities as they are.
 - Change the page here, never in the published copy: the next deploy
   overwrites anything edited there.
+
+## Deploying
+Deploying means publishing `public/index.html` to the existing artifact URL,
+which is in the owner's local notes, not in this repo. Only Claude can do it,
+and only with the owner's OK. Commit first, then:
+1. Read the live artifact. If its version isn't the one the last deploy
+   produced, someone changed the published copy: compare it with `main` and
+   bring any changes into the repo before going on.
+2. Save a backup of the `jobs` collection to a dated JSON file outside the repo.
+3. If the deploy changes the data model, migrate the documents first (pinned
+   writes) and update `docs/schema.md`.
+4. Publish `public/index.html` to the artifact URL. Leave out `capabilities`
+   so the stored ones (`db`, `downloads`) carry forward.
+5. List `jobs` again and confirm it matches the backup, then open the page for
+   the owner to check it says "Synced with Claude".
+6. Record the commit and artifact version in `docs/roadmap.md` (Deploys).
 
 ## Layout
 - `public/index.html`: the whole app (styles, markup, script).
