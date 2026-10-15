@@ -1,0 +1,99 @@
+# Data schema
+
+The schema is defined by the live data and by `normalize()` in
+`public/index.html`. Change both together, and record the change here.
+
+## Where the data lives
+
+- **Shared database** (the record): the artifact's `db`, collection `jobs`,
+  one document per job. The document id is the job id. The page subscribes to
+  the whole collection (up to 1,000 documents).
+- **Browser cache**: `localStorage["appdesk.v3.cache"]` holds
+  `{ version: 3, jobs }` so the page can draw before the database answers.
+  It is never the record.
+- **Legacy**: `localStorage["appdesk.v2"]` is the v2 record. v3 reads it once,
+  copies any missing jobs into the database, then sets
+  `localStorage["appdesk.v3.migrated"] = "1"`.
+
+Platform limits: a document can be at most 256 KiB (the largest job today is
+about 15 KB). The number of documents per collection and per database is
+capped; when the cap is hit, new jobs can't be added but existing ones can
+still be edited, and the page shows "The desk is full".
+
+## Job
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Same as the document id. The page builds it as a company slug (up to 26 characters) plus `-` and 7 random base-36 characters, for example `acme-k3j9x2q`. Jobs Claude adds may use a readable slug such as `acme-sysadmin`. Older documents may lack the field; the page fills it from the document id. |
+| `company` | string | Required. Defaults to `"Unknown company"`. |
+| `title` | string | Required. Defaults to `"Untitled role"`, or `"Details to fetch"` when only a link was pasted. |
+| `status` | enum | `queued`, `working`, `applied`, `interview`, `offer`, `closed`. Anything else is read as `queued`. Jobs are never deleted by agents; closing is a status change. |
+| `fit` | number or null | Fit score 0–100. `null` means not scored yet (a queued job with no score counts as "To score"). 85 or more shows green, under 60 grey. |
+| `band` | string | Pay range as shown on the posting, free text: `"$95,000 - $120,000"`, `"$3,400 biweekly (~$88k/yr)"`, `"not posted"`, or `""`. Sorting uses the first number in the text (values under 1,000 are read as thousands). |
+| `location` | string | Free text, usually `"City, BC"`. |
+| `url` | string | Link to the posting. Duplicate check: same URL, or the same LinkedIn job id. |
+| `source` | string | Free text: `"LinkedIn"`, `"Indeed"`, `"LinkedIn Easy Apply"`, a job board, or a recruiter. The parser sets `LinkedIn` or `Indeed` from the URL. |
+| `posted` | string | `YYYY-MM-DD`. Set from "3 days ago" style text when pasting, otherwise the day it was added. May be missing. |
+| `applied` | string or null | `YYYY-MM-DD`. Set to today the first time status becomes `applied`. |
+| `notes` | string | The Brief tab: assessment and notes. |
+| `posting` | string | Full posting text, kept in case the posting is taken down. Empty on a job that isn't closed shows the "no text" flag. |
+| `letter` | string | Cover letter as plain text (format below). |
+| `questions` | array | Question thread (format below). |
+| `qSeen` | string or null | The `id` of the last thread message the owner has seen. Set by the page when the Questions tab opens. Agents leave it alone. |
+| `created` | string | ISO 8601 timestamp, set by the page for jobs added since v3. Optional. |
+
+Documents written by Claude may carry only some fields. `normalize()` fills
+the gaps: `questions` → `[]`, `fit` → `null`, `letter`/`notes`/`posting` →
+`""`, `applied`/`qSeen` → `null`.
+
+### Question thread entries
+
+```json
+{ "id": "q-k3j9x2q", "ts": "2026-10-14", "who": "user", "text": "Is the band negotiable?" }
+```
+
+- `who`: `"user"` (the owner, asking) or `"claude"` (answering).
+- `ts`: `YYYY-MM-DD`.
+- `id`: unique within the job. The page uses `"q-"` plus 7 random base-36
+  characters.
+- A thread is **open** when its last entry is from `user`, and has a **new
+  answer** when its last entry is from `claude` and its `id` is not `qSeen`.
+- Append only. Never edit, remove or reorder existing entries.
+- The v3 page in claude.ai stored the owner's role under their first name
+  instead of `"user"`. Any such entries need to be rewritten as `"user"`
+  before the first deploy from this repo.
+
+### Cover letter text
+
+The PDF layout reads structure from the plain text:
+
+- Blocks are separated by a blank line.
+- First block: line 1 is the writer's name (set large and bold, and also used
+  in the PDF filename), line 2 is the contact line, then a rule is drawn.
+- A short line (under 62 characters, not ending in `.` or `;`) stays on its own
+  line, which suits the date, addressee and sign-off. A line starting with `Re:`
+  is bold.
+- Longer lines wrap as paragraphs.
+- The PDF tries three progressively tighter type settings so the letter fits
+  on one page before spilling onto a second.
+
+## Export file
+
+"Export backup" saves, and "Import" reads, this shape:
+
+```json
+{
+  "version": 3,
+  "exported": "2026-10-14",
+  "profile": { "name": "", "contact": "" },
+  "jobs": [ ]
+}
+```
+
+- `version` is the schema version (v2 exports used `2`, v1 had only `version`
+  and `jobs`). It is not a save counter.
+- `profile` is carried along, but the page no longer uses it: the letter text
+  holds the writer's name and contact line.
+- Import merges by `id`: a job with a matching id is replaced, others are added.
+
+`sample-data.json` uses the export shape, with fictional jobs only.
