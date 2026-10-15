@@ -354,7 +354,7 @@ textarea.note{min-height:110px;font-size:13px}
   <div class="modal">
     <header><h2>Add postings</h2></header>
     <div class="body">
-      <p class="hint" style="margin-top:0">Paste a whole posting, or just its LinkedIn link. Company, role, location, band and posted date are pulled out where they can be; Claude fills in the rest.</p>
+      <p class="hint" style="margin-top:0">Paste a whole LinkedIn or Indeed page (select all, copy), or just the job's link. Company, role, location, band and posted date are pulled out where they can be; Claude fills in the rest.</p>
       <textarea class="field" id="pasteBox" placeholder="Paste the posting here…"></textarea>
       <div class="preview" id="parsePreview" hidden></div>
     </div>
@@ -1102,6 +1102,108 @@ function linkedinId(url){
   var m = String(url||"").match(/(?:jobs\/view\/(?:[^\/?#]*-)?|currentJobId=)(\d{6,})/);
   return m ? m[1] : "";
 }
+/* Indeed's job key: "vjk" in search results, "jk" on the job's own page. */
+function indeedKey(url){
+  url = String(url||"");
+  if(!/indeed\./i.test(url)) return "";
+  var m = url.match(/[?&#](?:vjk|jk)=([0-9a-f]{16})(?![0-9a-z])/i);
+  return m ? m[1].toLowerCase() : "";
+}
+/* A search-results link opens the whole feed; store the job's own page. */
+function indeedUrl(url){
+  var key = indeedKey(url);
+  if(!key) return url;
+  var host = (String(url).match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || "ca.indeed.com";
+  return "https://" + host + "/viewjob?jk=" + key;
+}
+/* Which site and job a URL points at, for duplicate checks. */
+function jobRef(url){
+  var li = linkedinId(url);
+  if(li) return {site:"LinkedIn", id:li};
+  var ik = indeedKey(url);
+  if(ik) return {site:"Indeed", id:ik};
+  return null;
+}
+
+/* ---- Indeed ----
+   A search-results paste holds a list of other jobs before the selected one,
+   so everything is read from the selected job's own block. Its header (title,
+   company, rating, location, pay, job type) sits just above "Apply now" or the
+   "Job details" heading, sometimes under a "<Company> logo" line. */
+var INDEED_PAGE = /^\s*Full job description\s*$/m;
+var INDEED_ANCHOR = /^(apply now|apply on company site|profile insights|job details|full job description)$/i;
+var INDEED_END = /^(report job|hiring lab|©\s*\d{4}\s*indeed)$/i;
+var INDEED_BADGE = /^(easily apply|urgently hiring|responsive employer|hiring multiple candidates|new|just posted|today|often replies .*|typically responds .*|employer active .*|active \d+.*|posted .*|\d+(\.\d+)?|\d(\.\d)? out of 5 stars.*|[\d,]+ reviews?|.+ logo|[-–·|\s]+)$/i;
+var INDEED_TYPE = /^(full-time|part-time|permanent|contract|fixed term contract|temporary|casual|internship|seasonal|freelance)\b/i;
+var PLACE = /([A-Z][A-Za-z .'\-]+,\s*(?:BC|AB|ON|British Columbia|Alberta|Ontario|Canada))\b/;
+function isPlace(l){
+  return PLACE.test(l) || /^(remote|hybrid|on-?site|british columbia|alberta|ontario|canada)\b/i.test(l);
+}
+/* "$110,000–$140,000 a year" -> "$110,000 - $140,000"; other periods keep
+   their unit and get a yearly estimate, like the biweekly band above. */
+function indeedPay(l){
+  var m = l.replace(/\s+/g," ").match(/\$\s?([\d,]+(?:\.\d+)?)(?:\s*[-–—]\s*\$?\s?([\d,]+(?:\.\d+)?))?\s*(?:an?|per)\s+(year|hour|day|week|month)\b/i);
+  if(!m) return l;
+  var lo = m[1], hi = m[2], unit = m[3].toLowerCase();
+  var band = "$" + lo + (hi ? " - $" + hi : "");
+  if(unit === "year") return band;
+  var per = {hour:2080, day:260, week:52, month:12}[unit];
+  var k = function(v){ return Math.round(parseFloat(v.replace(/,/g,""))*per/1000); };
+  return band + (unit === "hour" ? " an hour" : " a " + unit)
+    + " (~$" + k(lo) + "k" + (hi ? "-$" + k(hi) + "k" : "") + "/yr)";
+}
+function parseIndeed(raw, out){
+  var all = raw.replace(/\r/g,"").split("\n").map(function(l){ return l.replace(/ /g," ").trim(); });
+  var a = -1;
+  for(var i=0;i<all.length;i++){ if(INDEED_ANCHOR.test(all[i])){ a = i; break; } }
+  if(a < 0) return null;                          // not a layout we know
+  var floor = 0;                                  // just below the last logo line
+  for(var f=0;f<a;f++){ if(/ logo$/i.test(all[f])) floor = f + 1; }
+
+  // Walk up from the anchor past pay, job type, location and badge lines:
+  // the first two other lines are the company, then the title.
+  var picked = [];
+  for(var j=a-1; j>=floor && picked.length<2; j--){
+    var l = all[j];
+    if(!l || /\$\s?\d/.test(l) || INDEED_TYPE.test(l) || INDEED_BADGE.test(l) || isPlace(l)) continue;
+    picked.push(j);
+  }
+  if(picked.length < 2) return null;
+  var titleAt = picked[1];
+  out.title = all[titleAt];
+  out.company = all[picked[0]].replace(/\s+\d(\.\d)?(\s*out of 5 stars)?$/i, "");
+  out.source = "Indeed";
+
+  var head = all.slice(titleAt, a).filter(function(l){ return l && !INDEED_BADGE.test(l); });
+  head.slice(2).forEach(function(l){
+    if(!out.location && isPlace(l)){
+      var pm = l.match(PLACE);
+      out.location = pm ? pm[1].replace(/\s+/g," ") : l;
+    }
+    if(!out.band && /\$\s?\d/.test(l)) out.band = indeedPay(l);
+  });
+
+  var end = all.length;
+  for(var e=a; e<all.length; e++){ if(INDEED_END.test(all[e])){ end = e; break; } }
+  var body = all.slice(a, end).filter(function(l){ return !/^(apply now|apply on company site)$/i.test(l); });
+
+  var posted = all.slice(titleAt, end).join("\n").match(/^posted (\d+)\+? days? ago$|^(just posted|today)$/im);
+  if(posted){
+    var d = new Date(Date.now() - (posted[1] ? parseInt(posted[1],10) : 0)*86400000);
+    var p2 = function(x){return x<10?"0"+x:""+x};
+    out.posted = d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
+  }
+
+  // Keep the job, not the page: no result list, site chrome or footer.
+  out.posting = ((out.url ? out.url + "\n" : "") + head.join("\n") + "\n\n" + body.join("\n"))
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\n+([A-Za-z0-9]{8,14})\s*$/, function(m, t){   // Indeed's trailing tracking code
+      return /[a-z]/.test(t) && /[A-Z]/.test(t) && /\d/.test(t) ? "" : m;
+    })
+    .trim();
+  return out;
+}
+
 function parsePaste(raw){
   var lines = raw.replace(/\r/g,"").split("\n")
     .map(function(l){ return l.replace(/ /g," ").trim(); })
@@ -1127,7 +1229,11 @@ function parsePaste(raw){
     if(m){ out.url = m[0]; break; }
   }
   if(/linkedin\./i.test(out.url)) out.source = "LinkedIn";
-  else if(/indeed\./i.test(out.url)) out.source = "Indeed";
+  else if(/indeed\./i.test(out.url)){ out.source = "Indeed"; out.url = indeedUrl(out.url); }
+  if(out.source === "Indeed" || INDEED_PAGE.test(raw)){
+    var indeed = parseIndeed(raw, out);
+    if(indeed) return indeed;
+  }
 
   // Band — LinkedIn's own "91K CAD/yr - 113K CAD/yr" chip comes first
   var joined = lines.join("\n");
@@ -1286,28 +1392,32 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   var raw = document.getElementById("pasteBox").value;
   if(!raw.trim()) return;
   var p = parsePaste(raw);
-  var lid = linkedinId(p.url);
-  if(p.url){
-    var dup = state.jobs.filter(function(x){
-      return x.url && (x.url === p.url || (lid && linkedinId(x.url) === lid));
-    })[0];
-    if(dup){
-      document.getElementById("addScrim").hidden = true;
-      ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";
-      renderAll();
-      toast("Already on the desk: " + dup.company + " (" + dup.status + ")");
-      return;
-    }
+  var ref = jobRef(p.url);
+  // The same job: same link, same LinkedIn or Indeed job, or the same company
+  // and title (the same posting found on another site).
+  var same = function(a, b){ return String(a||"").toLowerCase().replace(/[^a-z0-9]/g,"") === String(b||"").toLowerCase().replace(/[^a-z0-9]/g,""); };
+  var dup = state.jobs.filter(function(x){
+    if(p.url && x.url === p.url) return true;
+    var xr = jobRef(x.url);
+    if(ref && xr && xr.site === ref.site && xr.id === ref.id) return true;
+    return !!(p.company && p.title && same(x.company, p.company) && same(x.title, p.title));
+  })[0];
+  if(dup){
+    document.getElementById("addScrim").hidden = true;
+    ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";
+    renderAll();
+    toast("Already on the desk: " + dup.company + " (" + dup.status + ")");
+    return;
   }
   var linkOnly = /^https?:\/\/\S+$/.test(raw.trim());
   var j = {
-    id: uid(p.company || (lid ? "linkedin-" + lid : "job")),
-    company: p.company || (lid ? "LinkedIn " + lid : "Unknown company"),
+    id: uid(p.company || (ref ? ref.site.toLowerCase() + "-" + ref.id : "job")),
+    company: p.company || (ref ? ref.site + " " + ref.id : "Unknown company"),
     title: p.title || (linkOnly ? "Details to fetch" : "Untitled role"),
     created: new Date().toISOString(),
     band: p.band, location: p.location, url: p.url, source: p.source,
     posted: p.posted || today(), applied: null, status: "queued",
-    fit: null, notes: "", posting: linkOnly ? "" : raw.trim(), letter: "", questions: [], qSeen: null
+    fit: null, notes: "", posting: linkOnly ? "" : (p.posting || raw.trim()), letter: "", questions: [], qSeen: null
   };
   state.jobs.unshift(j);
   create(j);

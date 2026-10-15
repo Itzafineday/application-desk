@@ -31,14 +31,14 @@ still be edited, and the page shows "The desk is full".
 | `title` | string | Required. Defaults to `"Untitled role"`, or `"Details to fetch"` when only a link was pasted. |
 | `status` | enum | `queued`, `working`, `applied`, `interview`, `offer`, `closed`. Anything else is read as `queued`. Jobs are never deleted by agents; closing is a status change. |
 | `fit` | number or null | Fit score 0–100. `null` means not scored yet (a queued job with no score counts as "To score"). 85 or more shows green, under 60 grey. |
-| `band` | string | Pay range as shown on the posting, free text: `"$95,000 - $120,000"`, `"$3,400 biweekly (~$88k/yr)"`, `"not posted"`, or `""`. Sorting uses the first number in the text (values under 1,000 are read as thousands). |
+| `band` | string | Pay range as shown on the posting, free text: `"$95,000 - $120,000"`, `"$3,400 biweekly (~$88k/yr)"`, `"$30 - $38 an hour (~$62k-$79k/yr)"`, `"not posted"`, or `""`. Sorting uses the first number in the text (values under 1,000 are read as thousands). |
 | `location` | string | Free text, usually `"City, BC"`. |
-| `url` | string | Link to the posting. Duplicate check: same URL, or the same LinkedIn job id. |
+| `url` | string | Link to the posting. Indeed links are stored as the job's own page (`/viewjob?jk=<key>`), even when pasted from search results. Duplicate check when adding: the same URL, the same LinkedIn job id or Indeed job key, or the same company and title (the same posting found on another site). |
 | `source` | string | Free text: `"LinkedIn"`, `"Indeed"`, `"LinkedIn Easy Apply"`, a job board, or a recruiter. The parser sets `LinkedIn` or `Indeed` from the URL. |
 | `posted` | string | `YYYY-MM-DD`. Set from "3 days ago" style text when pasting, otherwise the day it was added. May be missing. |
 | `applied` | string or null | `YYYY-MM-DD`. Set to today the first time status becomes `applied`. |
 | `notes` | string | The Brief tab: assessment and notes. |
-| `posting` | string | Full posting text, kept in case the posting is taken down. Empty on a job that isn't closed shows the "no text" flag. |
+| `posting` | string | Full posting text, kept in case the posting is taken down. For an Indeed paste only the selected job's own text is kept, not the result list, site chrome or footer. Empty on a job that isn't closed shows the "no text" flag. |
 | `letter` | string | Cover letter as plain text (format below). |
 | `questions` | array | Question thread (format below). |
 | `qSeen` | string or null | The `id` of the last thread message the owner has seen. Set by the page when the Questions tab opens. Agents leave it alone. |

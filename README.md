@@ -2,8 +2,9 @@
 
 A job application tracker in a single HTML page.
 
-- Paste a LinkedIn posting (or just its link) and the company, role, location,
-  pay band and posted date are pulled out for you. Duplicates are caught by URL.
+- Paste a LinkedIn or Indeed page (or just the job's link) and the company,
+  role, location, pay band and posted date are pulled out for you. Duplicates
+  are caught by link, by job id, or by company and title across both sites.
 - Track each job through queued, working, applied, interview, offer and closed,
   with a fit score and notes.
 - Draft and edit a cover letter per job, fix em dashes in one click, and save
