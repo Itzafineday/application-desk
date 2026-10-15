@@ -56,6 +56,8 @@ and only with the owner's OK. Commit first, then:
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
 - `public/sample-data.json`: fictional jobs for the demo and for tests.
+- `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
+  dated export file and keeps the newest 30 (see Backups).
 
 ## Working with the live data
 Only Claude, signed in as the owner, can reach the shared database (claude.ai
@@ -69,6 +71,16 @@ artifact tools). Other agents work on code and sample data only.
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection
   to a dated JSON file outside the repo.
+
+## Backups
+A daily scheduled Claude task, on one machine only, lists the `jobs`
+collection into a fresh temporary folder (read-only), then runs
+`node scripts/pack-backup.js <listing>/jobs <backup-folder> --keep 30`. The
+script writes `application-desk-backup-<date>.json` in the export shape, so
+the page's Import can restore it. It refuses to write when the listing is
+empty or unreadable, warns when the job count drops by more than a fifth, and
+only rotates files with exactly that name. Run it from one machine: two
+machines writing the same synced folder create conflict copies.
 
 ## Conventions
 - Small commits, one concern each, imperative mood ("Add Indeed parser").
