@@ -12,7 +12,7 @@ artifact's shared database.
 | 4 | First deploy from the repo to the existing artifact | done |
 | 5 | Backups: a scheduled job that copies the `jobs` collection to a dated JSON file, keeping the last 30 | done |
 | 6 | Indeed parser, built against real pasted postings | done (search results and a job's own page) |
-| 7 | README with screenshots from sample data; review history, then make the repo public | planned |
+| 7 | README with screenshots from sample data; review history, then make the repo public | README and history review done; going public needs the owner's OK |
 
 ## Deploys
 
