@@ -373,8 +373,9 @@ textarea.note{min-height:110px;font-size:13px}
 "use strict";
 
 /* ============================ state ============================ */
-/* v3: the shared store (db capability) is the record. Claude reads and writes
-   the same "jobs" collection, so nothing round-trips through a file.
+/* The jobs live in a store (see "stores" below). In claude.ai that is the
+   artifact's shared database, which Claude reads and writes too. The page
+   keeps a localStorage copy only so it can draw before the store answers.
    appdesk.v2 is the old browser copy: read once for migration, never written. */
 var V2_KEY = "appdesk.v2";
 var CACHE_KEY = "appdesk.v3.cache";
@@ -384,7 +385,7 @@ var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
   "fit","notes","posting","letter","questions","qSeen","created"];
 
-var db = null;
+var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var flushTimer = null, cacheTimer = null;
 
@@ -450,28 +451,106 @@ function touch(j, names){
   cacheLocal();
 }
 function flush(){
-  if(!db) return;                       // stays pending until connected
+  if(!store) return;                    // stays pending until a store is ready
   var batch = pending; pending = {};
   Object.keys(batch).forEach(function(id){
-    var ref = db.doc("jobs/" + id);
-    retry(function(){ return ref.update(batch[id]); }).catch(function(e){
-      var j = byId(id);
-      if(e && e.code === "invalid_argument" && j) return ref.set(clean(j));
-      throw e;
-    }).catch(function(e){ writeFailed(e); });
+    var j = byId(id);
+    store.update(id, batch[id], j && clean(j)).catch(writeFailed);
   });
 }
 function create(j){
   cacheLocal();
-  if(!db) return;
-  retry(function(){ return db.doc("jobs/" + j.id).set(clean(j)); }).catch(writeFailed);
+  if(!store) return;
+  store.put(clean(j)).catch(writeFailed);
 }
 function removeJob(id){
   delete pending[id];
   cacheLocal();
-  if(!db) return;
-  retry(function(){ return db.doc("jobs/" + id).delete(); }).catch(writeFailed);
+  if(!store) return;
+  store.remove(id).catch(writeFailed);
 }
+function writeFailed(e){
+  var code = e && e.code;
+  if(code === "quota_exceeded") toast("The desk is full. Delete some closed postings, then try again.", true);
+  else if(code === "revoked"){ useStore(browserStore()); toast("Lost access to the shared desk. Reload the page.", true); }
+  else toast("A change did not save. Reload the page and check it.", true);
+}
+
+/* ============================ stores ============================ */
+/* Every store has the same shape, so nothing outside this section knows
+   where the jobs are kept:
+     kind                     "live" or "local"; drives the sync badge
+     start(onJobs, onLost)    deliver the whole job list now and after every
+                              change, as onJobs(jobs, fromCache); call
+                              onLost(err) if the connection drops for good
+     update(id, fields, job)  merge some fields into one job; `job` is the
+                              whole job, for a store that must create it  -> Promise
+     put(job)                 create or replace one job                   -> Promise
+     remove(id)               delete one job                              -> Promise
+   A hosted backend later is one more function returning this shape. */
+
+/* The artifact's shared database (the claude.ai "db" capability). */
+function artifactStore(db){
+  function ref(id){ return db.doc("jobs/" + id); }
+  function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
+
+  /* Copy jobs from the old v2 browser record into the shared database, once. */
+  function migrate(){
+    var done = false;
+    try{ done = localStorage.getItem(MIGRATED_KEY) === "1"; }catch(e){}
+    var old = readLocal(V2_KEY);
+    if(done || !old) return Promise.resolve();
+    return db.collection("jobs").limit(1000).get().then(function(snap){
+      var have = {};
+      snap.docs.forEach(function(d){ have[d.id] = 1; });
+      var todo = normalize({jobs: JSON.parse(JSON.stringify(old))}).jobs
+        .filter(function(j){ return !have[j.id]; });
+      var i = 0;
+      function next(){
+        var chunk = todo.slice(i, i + 4); i += 4;
+        if(!chunk.length) return Promise.resolve();
+        return Promise.all(chunk.map(function(j){ return put(clean(j)); })).then(next);
+      }
+      return next().then(function(){
+        try{ localStorage.setItem(MIGRATED_KEY, "1"); }catch(e){}
+        if(todo.length) toast("Moved " + todo.length + " postings into the shared desk");
+      });
+    });
+  }
+
+  return {
+    kind: "live",
+    start: function(onJobs, onLost){
+      migrate().then(null, function(){
+        toast("Some postings did not move across yet. Reload to try again.", true);
+      }).then(function(){
+        db.collection("jobs").limit(1000).onSnapshot(function(snap){
+          onJobs(snap.docs.map(function(d){
+            var o = JSON.parse(JSON.stringify(d.data() || {}));
+            o.id = d.id;
+            return o;
+          }), snap.metadata.fromCache);
+        }, onLost);
+      });
+    },
+    update: function(id, fields, job){
+      return retry(function(){ return ref(id).update(fields); }).catch(function(e){
+        if(e && e.code === "invalid_argument" && job) return put(job);
+        throw e;
+      });
+    },
+    put: put,
+    remove: function(id){ return retry(function(){ return ref(id).delete(); }); }
+  };
+}
+
+/* No shared store in this view: the page works from its localStorage cache,
+   which cacheLocal() keeps current, so a write has nothing left to do. */
+function browserStore(){
+  function done(){ return Promise.resolve(); }
+  return {kind:"local", start:function(){}, update:done, put:done, remove:done};
+}
+
 function retry(fn){
   return fn().catch(function(e){
     var code = e && e.code;
@@ -479,67 +558,32 @@ function retry(fn){
     return new Promise(function(res){ setTimeout(res, 600 + Math.random()*900); }).then(fn);
   });
 }
-function writeFailed(e){
-  var code = e && e.code;
-  if(code === "quota_exceeded") toast("The desk is full. Delete some closed postings, then try again.", true);
-  else if(code === "revoked"){ db = null; setSync("local"); toast("Lost access to the shared desk. Reload the page.", true); }
-  else toast("A change did not save. Reload the page and check it.", true);
-}
 
-/* ============================ connect + migrate ============================ */
+/* ============================ connect ============================ */
 function connect(){
-  if(!(window.claude && window.claude.use)){ setSync("local"); return; }
+  if(!(window.claude && window.claude.use)){ useStore(browserStore()); return; }
   window.claude.use("db").then(function(d){
-    if(!d){ setSync("local"); return; }
-    db = d;
-    migrate().then(subscribe, function(){
-      toast("Some postings did not move across yet. Reload to try again.", true);
-      subscribe();
-    });
-  }, function(){ setSync("local"); });
+    useStore(d ? artifactStore(d) : browserStore());
+  }, function(){ useStore(browserStore()); });
 }
-function migrate(){
-  var done = false;
-  try{ done = localStorage.getItem(MIGRATED_KEY) === "1"; }catch(e){}
-  var old = readLocal(V2_KEY);
-  if(done || !old) return Promise.resolve();
-  return db.collection("jobs").limit(1000).get().then(function(snap){
-    var have = {};
-    snap.docs.forEach(function(d){ have[d.id] = 1; });
-    var todo = normalize({jobs: JSON.parse(JSON.stringify(old))}).jobs
-      .filter(function(j){ return !have[j.id]; });
-    var i = 0;
-    function next(){
-      var chunk = todo.slice(i, i + 4); i += 4;
-      if(!chunk.length) return Promise.resolve();
-      return Promise.all(chunk.map(function(j){
-        return retry(function(){ return db.doc("jobs/" + j.id).set(clean(j)); });
-      })).then(next);
-    }
-    return next().then(function(){
-      try{ localStorage.setItem(MIGRATED_KEY, "1"); }catch(e){}
-      if(todo.length) toast("Moved " + todo.length + " postings into the shared desk");
-    });
-  });
-}
-function subscribe(){
-  db.collection("jobs").limit(1000).onSnapshot(function(snap){
-    if(snap.empty && snap.metadata.fromCache && state.jobs.length) return;
-    var jobs = snap.docs.map(function(d){
-      var o = JSON.parse(JSON.stringify(d.data() || {}));
-      o.id = d.id;
-      var p = pending[d.id];
+function useStore(s){
+  store = s;
+  if(s.kind === "local") setSync("local");
+  s.start(function(jobs, fromCache){
+    if(store !== s) return;               // replaced since, e.g. connection lost
+    if(!jobs.length && fromCache && state.jobs.length) return;
+    jobs.forEach(function(o){
+      var p = pending[o.id];
       if(p) Object.keys(p).forEach(function(k){ o[k] = p[k]; });
-      return o;
     });
     state.jobs = normalize({jobs: jobs}).jobs;
-    setSync("live");
+    setSync(s.kind);
     cacheLocal();
     refresh();
     if(Object.keys(pending).length) flush();
   }, function(){
-    db = null;
-    setSync("local");
+    if(store !== s) return;
+    useStore(browserStore());
     toast("Lost connection to the shared desk. Reload to reconnect.", true);
   });
 }
