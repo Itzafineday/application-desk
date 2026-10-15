@@ -19,6 +19,7 @@ artifact's shared database.
 | Date | Commit | Artifact version | Notes |
 |---|---|---|---|
 | 2026-10-15 | d57de4a | 5 | First deploy from the repo: store interface, demo mode, personal details removed. Job data checked identical before and after. |
+| 2026-10-15 | c7b14a1 | 6 | Indeed pastes (search-results layout) and duplicate checks across sites. Job data checked identical before and after. |
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
