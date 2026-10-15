@@ -31,7 +31,8 @@ Status: early. See [docs/roadmap.md](docs/roadmap.md) for what's next and
 
 ## Contributing
 Read [AGENTS.md](AGENTS.md) first: it covers the privacy rules and the
-pre-commit hook, for people and AI agents alike.
+pre-commit hook, for people and AI agents alike. Run the tests with
+`node --test` (Node 18 or later, nothing to install).
 
 ## License
 [MIT](LICENSE)

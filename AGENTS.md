@@ -56,6 +56,9 @@ and only with the owner's OK. Commit first, then:
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
 - `public/sample-data.json`: fictional jobs for the demo and for tests.
+- `tests/`: parser tests on fictional pastes (`node --test`, no install
+  needed). Run them before committing any change to the paste parser, and add
+  a fixture for each new layout. Fixtures must be invented, never a real posting.
 - `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
   dated export file and keeps the newest 30 (see Backups).
 
