@@ -1,0 +1,12 @@
+# Personal notes and real data never enter the repo
+CLAUDE.local.md
+REPO_PLAN.md
+*.state.json
+application-desk-state*.json
+application-desk-backup*.json
+backups/
+
+# Local tooling
+node_modules/
+.env
+.claude/settings.local.json
