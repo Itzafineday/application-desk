@@ -11,7 +11,7 @@ artifact's shared database.
 | 3 | Data layer: one store interface in the page (artifact database now), plus a demo mode that loads `sample-data.json` for local preview | done |
 | 4 | First deploy from the repo to the existing artifact | done |
 | 5 | Backups: a scheduled job that copies the `jobs` collection to a dated JSON file, keeping the last 30 | done |
-| 6 | Indeed parser, built against real pasted postings | done (search-results layout; a job's own page is untested) |
+| 6 | Indeed parser, built against real pasted postings | done (search results and a job's own page) |
 | 7 | README with screenshots from sample data; review history, then make the repo public | planned |
 
 ## Deploys

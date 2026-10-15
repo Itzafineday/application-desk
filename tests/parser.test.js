@@ -99,6 +99,8 @@ test("Indeed: a bare link becomes the job's own page", () => {
 test("indeedKey and jobRef identify the same job across link styles", () => {
   assert.equal(indeedKey("https://ca.indeed.com/?vjk=0123456789ABCDEF"), "0123456789abcdef");
   assert.equal(indeedKey("https://ca.indeed.com/viewjob?jk=0123456789abcdef&from=serp"), "0123456789abcdef");
+  assert.equal(parsePaste("https://ca.indeed.com/viewjob?jk=0123456789abcdef&from=shareddesktop_copy").url,
+    "https://ca.indeed.com/viewjob?jk=0123456789abcdef");
   assert.equal(indeedKey("https://www.linkedin.com/jobs/view/4000000004/"), "");
   assert.deepEqual(jobRef("https://ca.indeed.com/viewjob?jk=0123456789abcdef"), { site: "Indeed", id: "0123456789abcdef" });
   assert.deepEqual(jobRef("https://www.linkedin.com/jobs/view/4000000004/"), { site: "LinkedIn", id: "4000000004" });
