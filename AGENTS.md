@@ -23,8 +23,15 @@ This repo is meant to be public. Everything committed here is permanent.
   `downloads` capabilities. Jobs live in the artifact's shared database,
   collection `jobs`, one document per job (document id = job id). The page
   subscribes to the collection, so edits made by Claude show up live.
-- Opened outside claude.ai, the page falls back to "This browser only" and
-  works from a localStorage cache.
+- All data access goes through the store interface in the page's "stores"
+  section (`start`, `update`, `put`, `remove`). Never call the database
+  API anywhere else; a new backend is a new store.
+- Outside claude.ai there is no `window.claude`, so the page runs as a demo:
+  it loads `public/sample-data.json`, keeps edits in memory, and saves files
+  through the browser. Preview it by serving `public/` over HTTP (see the
+  README); opened straight from disk, the sample data can't load.
+- Inside claude.ai, if the database isn't available, the page shows "This
+  browser only" and works from its localStorage cache.
 - Deploying means publishing `public/index.html` to the existing artifact URL.
   The URL is in the owner's local notes, not in this repo. Deploy only with the
   owner's OK, and leave the stored capabilities as they are.
@@ -35,7 +42,7 @@ This repo is meant to be public. Everything committed here is permanent.
 - `public/index.html`: the whole app (styles, markup, script).
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
-- `sample-data.json`: fictional jobs for demos and tests.
+- `public/sample-data.json`: fictional jobs for the demo and for tests.
 
 ## Working with the live data
 Only Claude, signed in as the owner, can reach the shared database (claude.ai

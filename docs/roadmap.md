@@ -8,7 +8,7 @@ artifact's shared database.
 |---|------|--------|
 | 1 | Scaffold: repo, instructions, the v3 page with personal details removed | done |
 | 2 | Schema: `docs/schema.md` from the live data, fictional `sample-data.json` | done |
-| 3 | Data layer: one store interface in the page (artifact database now), plus a demo mode that loads `sample-data.json` for local preview | planned |
+| 3 | Data layer: one store interface in the page (artifact database now), plus a demo mode that loads `sample-data.json` for local preview | done |
 | 4 | First deploy from the repo to the existing artifact | planned |
 | 5 | Backups: a scheduled job that copies the `jobs` collection to a dated JSON file, keeping the last 30 | planned |
 | 6 | Indeed parser, built against real pasted postings | planned |

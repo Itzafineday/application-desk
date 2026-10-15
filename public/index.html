@@ -70,6 +70,7 @@ header{
 .sync::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--faint)}
 .sync[data-s="live"]{color:var(--muted)} .sync[data-s="live"]::before{background:var(--good)}
 .sync[data-s="local"]{color:var(--warn)} .sync[data-s="local"]::before{background:var(--warn)}
+.sync[data-s="demo"]{color:var(--accent)} .sync[data-s="demo"]::before{background:var(--accent)}
 .brand .ver{
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
   color:var(--faint);letter-spacing:.08em;text-transform:uppercase;
@@ -385,11 +386,16 @@ var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
   "fit","notes","posting","letter","questions","qSeen","created"];
 
+/* Inside claude.ai the platform sets window.claude before this script runs.
+   Anywhere else (a local server, another host) the page is a demo that loads
+   fictional jobs from sample-data.json and saves nothing. */
+var DEMO = !(window.claude && window.claude.use);
+
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var flushTimer = null, cacheTimer = null;
 
-var state = normalize({jobs: readLocal(CACHE_KEY) || readLocal(V2_KEY) || []});
+var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -427,6 +433,7 @@ function clean(j){
 function byId(id){ return state.jobs.filter(function(j){ return j.id === id; })[0]; }
 
 function cacheLocal(){
+  if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
     try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs})); }catch(e){}
@@ -436,9 +443,12 @@ function setSync(s){
   var el = document.getElementById("sync");
   el.dataset.s = s;
   el.textContent = s === "live" ? "Synced with Claude"
-    : s === "local" ? "This browser only" : "Connecting…";
+    : s === "local" ? "This browser only"
+    : s === "demo" ? "Demo data, not saved" : "Connecting…";
   el.title = s === "local"
     ? "The shared store is not available in this view. Changes stay in this browser."
+    : s === "demo"
+    ? "Fictional jobs from sample-data.json. Changes last until the page reloads."
     : "";
 }
 
@@ -479,7 +489,7 @@ function writeFailed(e){
 /* ============================ stores ============================ */
 /* Every store has the same shape, so nothing outside this section knows
    where the jobs are kept:
-     kind                     "live" or "local"; drives the sync badge
+     kind                     "live", "local" or "demo"; drives the sync badge
      start(onJobs, onLost)    deliver the whole job list now and after every
                               change, as onJobs(jobs, fromCache); call
                               onLost(err) if the connection drops for good
@@ -551,6 +561,22 @@ function browserStore(){
   return {kind:"local", start:function(){}, update:done, put:done, remove:done};
 }
 
+/* Fictional jobs for trying the page outside claude.ai. Edits stay in the
+   page's memory until it reloads. */
+function demoStore(url){
+  function done(){ return Promise.resolve(); }
+  return {
+    kind: "demo",
+    start: function(onJobs, onLost){
+      fetch(url).then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }).then(function(data){ onJobs((data && data.jobs) || [], false); }, onLost);
+    },
+    update: done, put: done, remove: done
+  };
+}
+
 function retry(fn){
   return fn().catch(function(e){
     var code = e && e.code;
@@ -561,7 +587,7 @@ function retry(fn){
 
 /* ============================ connect ============================ */
 function connect(){
-  if(!(window.claude && window.claude.use)){ useStore(browserStore()); return; }
+  if(DEMO){ useStore(demoStore("sample-data.json")); return; }
   window.claude.use("db").then(function(d){
     useStore(d ? artifactStore(d) : browserStore());
   }, function(){ useStore(browserStore()); });
@@ -583,6 +609,13 @@ function useStore(s){
     if(Object.keys(pending).length) flush();
   }, function(){
     if(store !== s) return;
+    if(s.kind === "demo"){
+      setSync("demo");
+      document.getElementById("empty").textContent =
+        "The sample data did not load. Serve the public folder over HTTP (see the README) instead of opening the file directly.";
+      refresh();
+      return;
+    }
     useStore(browserStore());
     toast("Lost connection to the shared desk. Reload to reconnect.", true);
   });
@@ -1021,6 +1054,16 @@ function offer(filename, data, okMsg){
         else if(code === "rate_limited") toast("A save prompt is already open", true);
         else toast("Could not save the file here", true);
       });
+    return;
+  }
+  if(DEMO){                             // outside claude.ai the browser saves it
+    var blob = data instanceof Blob ? data : new Blob([data], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    toast(okMsg);
     return;
   }
   toast("Saving files is not available in this view", true);

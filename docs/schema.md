@@ -11,6 +11,8 @@ The schema is defined by the live data and by `normalize()` in
 - **Browser cache**: `localStorage["appdesk.v3.cache"]` holds
   `{ version: 3, jobs }` so the page can draw before the database answers.
   It is never the record.
+- **Demo** (outside claude.ai): jobs come from `public/sample-data.json` and
+  stay in memory. Nothing is written to the cache.
 - **Legacy**: `localStorage["appdesk.v2"]` is the v2 record. v3 reads it once,
   copies any missing jobs into the database, then sets
   `localStorage["appdesk.v3.migrated"] = "1"`.
@@ -96,4 +98,4 @@ The PDF layout reads structure from the plain text:
   holds the writer's name and contact line.
 - Import merges by `id`: a job with a matching id is replaced, others are added.
 
-`sample-data.json` uses the export shape, with fictional jobs only.
+`public/sample-data.json` uses the export shape, with fictional jobs only.

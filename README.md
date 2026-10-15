@@ -14,6 +14,18 @@ It runs as a [Claude](https://claude.ai) artifact: the jobs live in the
 artifact's shared database, so Claude can read the queue, score postings,
 draft letters and answer questions, and the page updates live.
 
+## Try it
+Serve the `public` folder and open it in a browser. Outside claude.ai the page
+runs as a demo with fictional jobs, and nothing is saved.
+
+```
+npx serve public
+```
+
+or, with Python: `python -m http.server 4310 --directory public`. Opening
+`index.html` straight from disk won't work, because browsers block it from
+reading the sample data.
+
 Status: early. See [docs/roadmap.md](docs/roadmap.md) for what's next and
 [docs/schema.md](docs/schema.md) for the data model.
 
