@@ -16,7 +16,8 @@
 // build reads one text file per job page from <pages-dir>: the job's URL on
 // the first line, then the page text. Each is parsed with the page's own
 // parser and checked with its duplicate rule (against the Desk and against
-// jobs earlier in the run). Each new job is written to <out-dir>/<id>.json in
+// jobs earlier in the run). Dates like "1 week ago" count back from when each
+// page file was last written. Each new job is written to <out-dir>/<id>.json in
 // the shape of docs/schema.md, ready to create with an ArtifactData batch.
 // <out-dir> must be new or empty, so no stale file gets created by mistake.
 "use strict";
@@ -91,16 +92,24 @@ function check(desk, saved) {
   });
 }
 
-/* pages: [{name, text}] -> [{name, job | dup, warnings}] */
+/* pages: [{name, text, saved}] -> [{name, job | dup, warnings}]. `saved` is
+   when the page was read (ms); "1 week ago" counts back from then, not now. */
 function build(desk, pages, now) {
   const taken = new Set(desk.map((j) => j.id));
   const added = [];
   const date = now ? now.toISOString().slice(0, 10) : today();
-  return pages.map(({ name, text }) => {
+  return pages.map(({ name, text, saved }) => {
     text = String(text).replace(/^﻿/, "").replace(/\r/g, "");
     const first = text.split("\n")[0].trim();
     if (!/^https?:\/\/\S+$/.test(first)) return { name, warnings: ["first line is not the job's URL; skipped"] };
-    const p = parsePaste(text);
+    const clock = Date.now;
+    if (saved) Date.now = () => saved;
+    let p;
+    try {
+      p = parsePaste(text);
+    } finally {
+      Date.now = clock;
+    }
     p.url = canonical(first);
     const ref = jobRef(p.url);
     const dup = findDuplicate(desk, p) || findDuplicate(added, p);
@@ -147,8 +156,10 @@ function main() {
     const [jobsDir, pagesDir, outDir] = args;
     const desk = readJobs(jobsDir);
     if (!fs.existsSync(pagesDir)) fail(`no such folder: ${pagesDir}`);
-    const pages = fs.readdirSync(pagesDir).filter((f) => f.endsWith(".txt")).sort()
-      .map((name) => ({ name, text: fs.readFileSync(path.join(pagesDir, name), "utf8") }));
+    const pages = fs.readdirSync(pagesDir).filter((f) => f.endsWith(".txt")).sort().map((name) => {
+      const file = path.join(pagesDir, name);
+      return { name, text: fs.readFileSync(file, "utf8"), saved: fs.statSync(file).mtimeMs };
+    });
     if (!pages.length) fail(`no .txt pages in ${pagesDir}`);
     if (fs.existsSync(outDir) && fs.readdirSync(outDir).length) fail(`${outDir} is not empty; use a new folder`);
     fs.mkdirSync(outDir, { recursive: true });

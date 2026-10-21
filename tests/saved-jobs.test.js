@@ -82,3 +82,10 @@ test("build: new jobs get the schema's fields; duplicates and bad files are left
   assert.equal(rows[4].job, undefined);
   assert.match(rows[4].warnings[0], /first line is not the job's URL/);
 });
+
+test("build: \"1 week ago\" counts back from when the page was saved", () => {
+  const saved = new Date(2026, 9, 10, 12, 0, 0).getTime();
+  const [row] = build(desk, [{ name: "linkedin-4000000010.txt", text: fixture("linkedin-page-text.txt"), saved }]);
+  assert.equal(row.job.posted, "2026-10-03");
+  assert.equal(new Date(Date.now()).getDate(), 15);   // the clock is put back
+});
