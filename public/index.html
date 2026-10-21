@@ -1219,8 +1219,26 @@ function parseIndeed(raw, out){
   return out;
 }
 
-function parsePaste(raw){
-  var lines = raw.replace(/\r/g,"").split("\n")
+/* ---- LinkedIn ----
+   Below the posting, a job page carries the company profile, "More jobs"
+   (with other jobs' pay and dates) and the footer, and above "About the job"
+   some of LinkedIn's own prompts. Only the posting is read and kept. */
+var LINKEDIN_END = /^(…|\.\.\.)\s*more$|^(set alert for similar jobs|about the company|more jobs|see more jobs like this)$/i;
+var LINKEDIN_CHROME = /^(company logo.*|save|saved|use ai to assess how you fit|show match details|tailor my resume|help me stand out|people you can reach out to|show all|school alumni .*|.* school alumni work here|you’d be a top applicant.*|your profile and resume match.*)$/i;
+function linkedinPosting(raw){
+  var all = raw.replace(/\r/g,"").split("\n");
+  var a = -1;
+  for(var i=0;i<all.length;i++){ if(/^\s*about the job\s*$/i.test(all[i])){ a = i; break; } }
+  if(a < 0) return "";                            // not a job page we know
+  var end = all.length;
+  for(var e=a+1;e<all.length;e++){ if(LINKEDIN_END.test(all[e].trim())){ end = e; break; } }
+  return all.slice(0, end)
+    .filter(function(l){ return !LINKEDIN_CHROME.test(l.trim()); })
+    .join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function pasteLines(raw){
+  return raw.replace(/\r/g,"").split("\n")
     .map(function(l){ return l.replace(/ /g," ").trim(); })
     .filter(function(l){
       if(!l) return false;
@@ -1235,7 +1253,10 @@ function parsePaste(raw){
       if(/^\$?\s?[\d][\d,.]*\s?[Kk]?\s*(?:-|–|—|to)\s*\$?\s?[\d][\d,.]*\s?[Kk]?\s*(?:CAD|USD)?(?:\s*\/\s*yr)?$/i.test(l)) return false;
       return true;
     });
+}
 
+function parsePaste(raw){
+  var lines = pasteLines(raw);
   var out = {company:"", title:"", location:"", band:"", posted:"", url:"", source:""};
 
   // URL
@@ -1249,6 +1270,8 @@ function parsePaste(raw){
     var indeed = parseIndeed(raw, out);
     if(indeed) return indeed;
   }
+  var posting = out.source === "Indeed" ? "" : linkedinPosting(raw);
+  if(posting){ out.posting = posting; lines = pasteLines(posting); }
 
   // Band — LinkedIn's own "91K CAD/yr - 113K CAD/yr" chip comes first
   var joined = lines.join("\n");

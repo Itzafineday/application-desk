@@ -122,3 +122,23 @@ test("findDuplicate: same link, same job id on either site, or same company and 
   assert.equal(findDuplicate(desk, { url: "https://www.linkedin.com/jobs/view/4000000009/", company: "Northgate Robotics", title: "Cloud Architect" }), null);
   assert.equal(findDuplicate(desk, { url: "", company: "", title: "" }), null);
 });
+
+test("LinkedIn: job page text reads the posting, not the profile or More jobs below it", () => {
+  const p = parsePaste(fixture("linkedin-page-text.txt"));
+  assert.equal(p.company, "Larchmont Analytics");
+  assert.equal(p.title, "Senior Systems Administrator");
+  assert.equal(p.location, "Vancouver, BC");
+  assert.equal(p.posted, "2026-10-08");
+  assert.equal(p.band, "");                         // not a More jobs card's pay
+  assert.equal(p.source, "LinkedIn");
+  assert.equal(p.url, "https://www.linkedin.com/jobs/view/4000000010/");
+  assert.match(p.posting, /^https:\/\/www\.linkedin\.com\/jobs\/view\/4000000010\/\nLarchmont Analytics\n/);
+  assert.match(p.posting, /\nAbout the job\n/);
+  assert.match(p.posting, /legally entitled to work in Canada\.$/);
+  assert.doesNotMatch(p.posting, /School alumni|Tailor my resume|^Saved$|About the company|More jobs|Example Freight|132\.6K|Select language/m);
+});
+
+test("LinkedIn: pay in the posting is read even with other jobs' pay below", () => {
+  const text = fixture("linkedin-page-text.txt").replace("Work Permits\n", "Salary: $110,000 - $135,000 per year.\n\nWork Permits\n");
+  assert.equal(parsePaste(text).band, "$110,000 - $135,000");
+});

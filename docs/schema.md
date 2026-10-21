@@ -38,7 +38,7 @@ still be edited, and the page shows "The desk is full".
 | `posted` | string | `YYYY-MM-DD`. Set from "3 days ago" style text when pasting, otherwise the day it was added. May be missing. |
 | `applied` | string or null | `YYYY-MM-DD`. Set to today the first time status becomes `applied`. |
 | `notes` | string | The Brief tab: assessment and notes. |
-| `posting` | string | Full posting text, kept in case the posting is taken down. For an Indeed paste only the selected job's own text is kept, not the result list, site chrome or footer. Empty on a job that isn't closed shows the "no text" flag. |
+| `posting` | string | Full posting text, kept in case the posting is taken down. For an Indeed or LinkedIn paste only the job's own text is kept: not Indeed's result list, LinkedIn's company profile and "More jobs", or either site's chrome and footer. Empty on a job that isn't closed shows the "no text" flag. |
 | `letter` | string | Cover letter as plain text (format below). |
 | `questions` | array | Question thread (format below). |
 | `qSeen` | string or null | The `id` of the last thread message the owner has seen. Set by the page when the Questions tab opens. Agents leave it alone. |
