@@ -8,7 +8,7 @@ const path = require("path");
 
 // Pin "now" so "1 week ago" always resolves to the same date.
 Date.now = () => new Date(2026, 9, 15, 12, 0, 0).getTime();
-const { parsePaste, linkedinId, indeedKey, jobRef } = require("./load-parser")();
+const { parsePaste, linkedinId, indeedKey, jobRef, findDuplicate } = require("./load-parser")();
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
 
@@ -105,4 +105,20 @@ test("indeedKey and jobRef identify the same job across link styles", () => {
   assert.deepEqual(jobRef("https://ca.indeed.com/viewjob?jk=0123456789abcdef"), { site: "Indeed", id: "0123456789abcdef" });
   assert.deepEqual(jobRef("https://www.linkedin.com/jobs/view/4000000004/"), { site: "LinkedIn", id: "4000000004" });
   assert.equal(jobRef("https://jobs.example.com/postings/1234"), null);
+});
+
+test("findDuplicate: same link, same job id on either site, or same company and title", () => {
+  const desk = [
+    { id: "a", company: "Northgate Robotics", title: "Senior Cloud Engineer", url: "https://www.linkedin.com/jobs/view/4000000001/" },
+    { id: "b", company: "Kestrel Water Systems", title: "Senior Infrastructure Specialist", url: "https://ca.indeed.com/viewjob?jk=0123456789abcdef" },
+    { id: "c", company: "Harbourline Credit Union", title: "Sr Manager - IT Operations", url: "" },
+  ];
+  const why = (p) => { const d = findDuplicate(desk, p); return d && d.job.id + ": " + d.why; };
+  assert.equal(why({ url: "https://www.linkedin.com/jobs/view/4000000001/" }), "a: same link");
+  assert.equal(why({ url: "https://www.linkedin.com/jobs/view/4000000001/?refId=x" }), "a: same LinkedIn job");
+  assert.equal(why({ url: "https://ca.indeed.com/?vjk=0123456789abcdef" }), "b: same Indeed job");
+  assert.equal(why({ url: "https://jobs.example.com/1", company: "Harbourline Credit Union", title: "Sr. Manager, IT Operations" }),
+    "c: same company and title");
+  assert.equal(findDuplicate(desk, { url: "https://www.linkedin.com/jobs/view/4000000009/", company: "Northgate Robotics", title: "Cloud Architect" }), null);
+  assert.equal(findDuplicate(desk, { url: "", company: "", title: "" }), null);
 });

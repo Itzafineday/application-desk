@@ -1124,6 +1124,21 @@ function jobRef(url){
   if(ik) return {site:"Indeed", id:ik};
   return null;
 }
+/* The job in `jobs` that a parsed paste repeats: the same link, the same
+   LinkedIn or Indeed job, or the same company and title (the same posting
+   found on another site). Returns {job, why}, or null when it is new. */
+function findDuplicate(jobs, p){
+  var ref = jobRef(p.url);
+  var squash = function(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); };
+  for(var i=0;i<jobs.length;i++){
+    var x = jobs[i], xr = jobRef(x.url);
+    if(p.url && x.url === p.url) return {job:x, why:"same link"};
+    if(ref && xr && xr.site === ref.site && xr.id === ref.id) return {job:x, why:"same " + ref.site + " job"};
+    if(p.company && p.title && squash(x.company) === squash(p.company) && squash(x.title) === squash(p.title))
+      return {job:x, why:"same company and title"};
+  }
+  return null;
+}
 
 /* ---- Indeed ----
    A search-results paste holds a list of other jobs before the selected one,
@@ -1393,15 +1408,7 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   if(!raw.trim()) return;
   var p = parsePaste(raw);
   var ref = jobRef(p.url);
-  // The same job: same link, same LinkedIn or Indeed job, or the same company
-  // and title (the same posting found on another site).
-  var same = function(a, b){ return String(a||"").toLowerCase().replace(/[^a-z0-9]/g,"") === String(b||"").toLowerCase().replace(/[^a-z0-9]/g,""); };
-  var dup = state.jobs.filter(function(x){
-    if(p.url && x.url === p.url) return true;
-    var xr = jobRef(x.url);
-    if(ref && xr && xr.site === ref.site && xr.id === ref.id) return true;
-    return !!(p.company && p.title && same(x.company, p.company) && same(x.title, p.title));
-  })[0];
+  var found = findDuplicate(state.jobs, p), dup = found && found.job;
   if(dup){
     document.getElementById("addScrim").hidden = true;
     ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";
