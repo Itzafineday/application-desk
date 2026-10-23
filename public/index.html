@@ -241,6 +241,17 @@ textarea.note{min-height:110px;font-size:13px}
 .msg.claude .who{color:var(--accent)}
 .qempty{color:var(--faint);font-size:12.5px;margin-bottom:12px}
 
+/* ---------- help me apply ---------- */
+.fq{border:1px solid var(--line-soft);border-radius:var(--radius);padding:9px 12px;margin-bottom:10px}
+.fq .q{font-size:13px;font-weight:500;line-height:1.55}
+.fq .q .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);margin-right:7px}
+.fq .a{
+  white-space:pre-wrap;font-size:13px;line-height:1.6;margin-top:7px;padding:8px 11px;
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius);
+}
+.fq .a.none{background:transparent;border:1px dashed var(--line);color:var(--faint);font-size:12px;padding:5px 11px}
+.fq .rowbtns{margin:7px 0 0;align-items:center}
+
 /* ---------- modal ---------- */
 .scrim{
   position:fixed;inset:0;background:rgba(10,14,18,.55);display:flex;
@@ -412,7 +423,7 @@ var MIGRATED_KEY = "appdesk.v3.migrated";   // gitleaks:allow (a storage key nam
 var STATUSES = ["queued","working","applied","interview","offer","closed"];
 var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
-  "fit","notes","posting","letter","questions","qSeen","created"];
+  "fit","notes","posting","letter","questions","qSeen","created","form"];
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
 var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
@@ -467,6 +478,7 @@ function normalize(s){
     j.title = j.title || "Untitled role";
     j.status = STATUSES.indexOf(j.status) >= 0 ? j.status : "queued";
     j.questions = Array.isArray(j.questions) ? j.questions : [];
+    j.form = Array.isArray(j.form) ? j.form : [];
     j.fit = (j.fit === 0 || j.fit) ? j.fit : null;
     j.letter = j.letter || "";
     j.notes = j.notes || "";
@@ -886,7 +898,8 @@ var TABS = [
   {k:"brief", label:"Brief"},
   {k:"letter", label:"Letter"},
   {k:"questions", label:"Questions"},
-  {k:"posting", label:"Posting"}
+  {k:"posting", label:"Posting"},
+  {k:"apply", label:"Help me apply"}
 ];
 function job(){ return state.jobs.filter(function(j){return j.id===ui.sel})[0]; }
 
@@ -1015,6 +1028,54 @@ function renderTab(){
       if(pc) pc.addEventListener("click", function(){ ui.editPosting = false; renderTab(); });
     }
   }
+
+  else if(ui.tab === "apply"){
+    var list = j.form.map(function(f, i){
+      var answer = typeof f.answer === "string" ? f.answer : "";
+      return '<div class="fq"><div class="q"><span class="n">' + (i+1) + '</span>' + esc(f.text) + '</div>'
+        + (answer.trim() ? '<div class="a">' + esc(answer) + '</div>' : '<div class="a none">No draft yet</div>')
+        + '<div class="rowbtns">'
+        + (answer.trim() ? '<button class="btn sm" data-copy="' + i + '">Copy answer</button>'
+          + '<span class="hint">' + answer.length + ' chars</span>' : '')
+        + '<button class="btn ghost sm" data-remove="' + i + '">Remove</button></div></div>';
+    }).join("");
+    b.innerHTML = '<h3>Application form</h3>'
+      + '<p class="qempty">For company sites with their own application form. Paste its questions below, one per line, then ask Claude in chat to draft answers'
+      + (state.profile ? ' from your profile' : '') + '. Drafts appear under each question for you to check and copy into the form. Claude never submits anything.</p>'
+      + (state.profile ? '' : '<p class="qempty">There is no profile yet, so Claude only has the posting to go on. '
+        + '<button class="btn sm" id="fStart">Get started</button></p>')
+      + list
+      + '<textarea class="field note" id="fBox" placeholder="Paste the form\'s questions, one per line…"></textarea>'
+      + '<div class="rowbtns"><button class="btn primary sm" id="fAdd">Add questions</button>'
+      + (j.form.length ? '<button class="btn sm" id="fCopy">Copy request for Claude</button>' : '') + '</div>';
+    // Look the job up again on each click: a snapshot may have replaced it.
+    Array.prototype.forEach.call(b.querySelectorAll("[data-copy]"), function(btn){
+      btn.addEventListener("click", function(){
+        var f = (job() || j).form[+btn.dataset.copy];
+        if(f) copy(f.answer, "Answer copied");
+      });
+    });
+    Array.prototype.forEach.call(b.querySelectorAll("[data-remove]"), function(btn){
+      btn.addEventListener("click", function(){
+        var jj = job(); if(!jj) return;
+        jj.form.splice(+btn.dataset.remove, 1);
+        touch(jj, ["form"]); renderTab(); toast("Question removed");
+      });
+    });
+    var startBtn = document.getElementById("fStart");
+    if(startBtn) startBtn.addEventListener("click", openGetStarted);
+    document.getElementById("fAdd").addEventListener("click", function(){
+      var jj = job(); if(!jj) return;
+      var raw = document.getElementById("fBox").value;
+      var add = parseFormQuestions(raw, jj.form.map(function(f){ return String(f.text || ""); }));
+      if(!add.length){ toast(raw.trim() ? "No new questions in that paste" : "Paste the form's questions first"); return; }
+      add.forEach(function(t){ jj.form.push({id:uid("f"), ts:today(), text:t, answer:""}); });
+      touch(jj, ["form"]); renderTab();
+      toast("Added " + add.length + " question" + (add.length > 1 ? "s" : ""));
+    });
+    var fc = document.getElementById("fCopy");
+    if(fc) fc.addEventListener("click", function(){ copyFormRequest(job() || j); });
+  }
 }
 
 function fixDashes(t){
@@ -1050,6 +1111,16 @@ function copyOpenQuestions(){
   });
   if(!out.length){ toast("No open questions"); return; }
   copy("Questions from Seed Change:\n\n" + out.join("\n\n"), "Open questions copied");
+}
+
+/* Ask for drafts of the questions that have none yet (or all of them). */
+function copyFormRequest(j){
+  var todo = j.form.filter(function(f){ return !(typeof f.answer === "string" && f.answer.trim()); });
+  var list = (todo.length ? todo : j.form).map(function(f, i){ return (i+1) + ". " + f.text; });
+  copy("Please draft answers to the application form for " + j.company + " — " + j.title + "  [" + j.id + "]"
+    + " in Seed Change, from my profile and the posting. Save each draft as that question's answer"
+    + " in the Help me apply tab, and don't submit anything.\n\n" + list.join("\n"),
+    "Copied. Paste it into your chat with Claude.");
 }
 
 /* ============================ PDF ============================ */
@@ -1675,6 +1746,7 @@ function renderGetStarted(){
     stepEl.textContent = "";
     body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
       + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
+      + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
       + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
     foot.innerHTML = '<button class="btn primary" id="gsDone">Done</button>';
     document.getElementById("gsDone").addEventListener("click", function(){ closeGetStarted(false); });
@@ -1806,6 +1878,51 @@ function docxText(html){
   }
   walk(doc.body);
   return out.join("\n");
+}
+
+/* ============================ form questions ============================ */
+/* Splits questions pasted from a company's own application form into one
+   per line, leaving out what a copied form brings along: list numbers,
+   required marks, buttons, file pickers, yes/no choices and placeholders.
+   A line that only states a length limit joins the question above it. */
+var FORM_NOISE = /^(required|optional|select( an? (option|one))?|please select|choose( one| an option)?|yes|no|n\/a|answer|your answer|type here|enter text|upload( (a |your )?(file|resume|cv|cover letter))?|attach( a file)?|choose file|browse|no file chosen|drop files? here.*|or drag and drop.*|submit( application)?|next|back|previous|save|continue|save (and|&) continue|cancel|step \d+( of \d+)?\b.*)$/i;
+
+function cleanFormLine(l){
+  return l.replace(/\s+/g, " ").trim()
+    .replace(/^(\*\s*)+/, "")                                         // a leading required mark
+    .replace(/^([•·▪●\-–—]|\(?(q(uestion)?\s*)?\d{1,2}[.):]|\(?[a-h][.)])(?=\s)\s*/i, "")   // bullets, numbers
+    .replace(/\s*(\*|\(required\)|- required)$/i, "")                // a trailing required mark
+    .trim();
+}
+/* "0/1000", "Maximum 250 words", "500 characters remaining" -> "max 1000
+   characters" and so on; "" for any other line. */
+function formLimit(l){
+  var t = l.replace(/^\(/, "").replace(/\)\.?$/, "").trim();
+  var m = t.match(/^\d[\d,]*\s*\/\s*(\d[\d,]*)(\s*(characters?|chars|words))?$/i)
+    || t.match(/^(?:max(?:imum)?|limit(?:ed to)?|up to|no more than|(?:characters?|chars|words) (?:remaining|left|allowed))\s*:?\s*(\d[\d,]*)(\s*(characters?|chars|words))?$/i)
+    || t.match(/^(\d[\d,]*)\s*(characters?|chars|words)(\s+(max(imum)?|limit|remaining|left|allowed|or (less|fewer)))?$/i);
+  return m ? "max " + m[1] + (/word/i.test(t) ? " words" : " characters") : "";
+}
+/* The new questions in a paste, skipping any already in `existing`. */
+function parseFormQuestions(raw, existing){
+  var seen = {}, out = [], attach = false;   // attach: the last question was kept
+  function key(t){   // the same question, whatever its case, marks or added limit
+    return t.toLowerCase().replace(/\s*\(max [\d,]+ (characters|words)\)$/, "").replace(/[^a-z0-9]+/g, "");
+  }
+  (existing || []).forEach(function(t){ seen[key(t)] = 1; });
+  String(raw || "").replace(/\r/g, "").split("\n").forEach(function(line){
+    var l = cleanFormLine(line), limit = formLimit(l), last = out.length - 1;
+    if(limit){
+      if(attach && out[last].toLowerCase().indexOf(limit) < 0) out[last] += " (" + limit + ")";
+      return;
+    }
+    if(!/[A-Za-z]/.test(l) || FORM_NOISE.test(l.replace(/[.:…]+$/, ""))) return;
+    attach = !seen[key(l)];
+    if(!attach) return;
+    seen[key(l)] = 1;
+    out.push(l);
+  });
+  return out;
 }
 
 /* ============================ events ============================ */

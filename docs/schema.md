@@ -50,10 +50,11 @@ still be edited, and the page shows "The job list is full".
 | `questions` | array | Question thread (format below). |
 | `qSeen` | string or null | The `id` of the last thread message the owner has seen. Set by the page when the Questions tab opens. Agents leave it alone. |
 | `created` | string | ISO 8601 timestamp, set by the page for jobs added since v3. Optional. |
+| `form` | array | Help me apply: the questions of the company's own application form, with Claude's draft answers (format below). Added in v4. |
 
 Documents written by Claude may carry only some fields. `normalize()` fills
-the gaps: `questions` → `[]`, `fit` → `null`, `letter`/`notes`/`posting` →
-`""`, `applied`/`qSeen` → `null`.
+the gaps: `questions`/`form` → `[]`, `fit` → `null`,
+`letter`/`notes`/`posting` → `""`, `applied`/`qSeen` → `null`.
 
 ### Question thread entries
 
@@ -71,6 +72,27 @@ the gaps: `questions` → `[]`, `fit` → `null`, `letter`/`notes`/`posting` →
 - The v3 page in claude.ai stored the owner's role under their first name
   instead of `"user"`. Any such entries need to be rewritten as `"user"`
   before the first deploy from this repo.
+
+### Application form entries
+
+```json
+{ "id": "f-m2v8q1c", "ts": "2026-10-23", "text": "Why do you want to work here? (max 1000 characters)", "answer": "" }
+```
+
+- `text`: one question, as pasted in the Help me apply tab. The page splits a
+  paste into one entry per line and leaves out list numbers, required marks,
+  buttons, file pickers and yes/no choices. A length limit on its own line
+  ("0/1000", "Maximum 250 words") is added to the question above it as
+  `(max 1000 characters)`.
+- `answer`: plain text, `""` until Claude drafts one. The page shows it under
+  the question with a Copy button.
+- `id`: unique within the job, `"f-"` plus 7 random base-36 characters.
+  `ts`: `YYYY-MM-DD`, the day the question was added.
+- Claude fills in `answer`, from the profile and the posting, and may append
+  entries it is asked to. It never removes or reorders entries, and never
+  submits a form or anything else on a company site: the owner copies each
+  answer into the form and sends it.
+- The owner can remove an entry in the page.
 
 ### Cover letter text
 

@@ -27,6 +27,10 @@ page updates live.
   and experience, which you check before saving. Claude uses it for fit scores,
   letters and application answers. It opens by itself once when there is no
   profile yet, and every step can be skipped.
+- **Help me apply.** For company sites with their own long application form,
+  paste its questions into the job's Help me apply tab. Ask Claude in chat and
+  it drafts an answer to each one from your profile, for you to check and copy
+  into the form. It never submits anything.
 
 <p>
   <img src="docs/screenshots/letter.png" width="32%" alt="A job's cover letter, open for editing">
@@ -80,9 +84,9 @@ backups.
 - No build step. The app is `public/index.html`; the tests read the parsers
   straight out of it.
 - Run the tests with `node --test` (Node 18 or later, nothing to install). Any
-  change to the paste parser or the resume reader needs a fixture in
-  `tests/fixtures/`, and fixtures are always invented, never a real posting or
-  resume.
+  change to the paste parser, the resume reader or the form question splitter
+  needs a fixture in `tests/fixtures/`, and fixtures are always invented, never
+  a real posting, resume or form.
 - Read [AGENTS.md](AGENTS.md) before contributing. It covers the privacy rules,
   the pre-commit hook and the deploy checklist, for people and AI agents alike.
 - [docs/roadmap.md](docs/roadmap.md) has what's done, what's next and the

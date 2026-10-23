@@ -111,6 +111,11 @@ In the page itself:
   one page.
 - **Questions tab:** type a question about the job, then ask Claude in chat to
   answer it. The answer appears in the thread.
+- **Help me apply tab:** when a company's own site asks you to fill in a long
+  form, copy its questions, paste them here, and click **Copy request for
+  Claude**. Paste that into your chat with Claude, and a draft answer appears
+  under each question. Check it, then copy it into the form yourself. Claude
+  never submits anything.
 
 ## Keep a backup
 
