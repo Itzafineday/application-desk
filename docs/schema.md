@@ -20,7 +20,7 @@ The schema is defined by the live data and by `normalize()` in
 Platform limits: a document can be at most 256 KiB (the largest job today is
 about 15 KB). The number of documents per collection and per database is
 capped; when the cap is hit, new jobs can't be added but existing ones can
-still be edited, and the page shows "The desk is full".
+still be edited, and the page shows "The job list is full".
 
 ## Job
 

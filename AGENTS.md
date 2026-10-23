@@ -1,6 +1,7 @@
-# Application Desk: instructions for agents working on this repo
+# Seed Change: instructions for agents working on this repo
 
-A job application tracker in one HTML page: paste a posting, track its status,
+Seed Change (formerly Application Desk; the repo keeps the old name) is a job
+application tracker in one HTML page: paste a posting, track its status,
 score the fit, draft a cover letter and save it as a PDF, and keep a question
 thread per job. No build step.
 

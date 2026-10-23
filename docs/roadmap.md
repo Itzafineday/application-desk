@@ -39,7 +39,9 @@ rarely use don't clutter the page.
    sites that have their own long forms and questions. Claude drafts answers
    from the profile. With the browser extension it can fill the form for the
    user to review. It never submits by itself.
-5. **A better name** (candidates in issue #2).
+5. **A better name.** Done: **Seed Change** (decided in issue #2). The repo,
+   the database collection (`jobs`), the browser storage keys and the backup
+   file names keep their old names, so nothing existing has to move.
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)

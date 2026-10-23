@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Application Desk</title>
+<title>Seed Change</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
@@ -295,7 +295,7 @@ textarea.note{min-height:110px;font-size:13px}
 <div class="shell">
   <header>
     <div class="brand">
-      <h1>Application Desk</h1>
+      <h1>Seed Change</h1>
       <span class="ver">v3</span>
       <span class="sync" id="sync" data-s="connecting">Connecting…</span>
     </div>
@@ -481,8 +481,8 @@ function removeJob(id){
 }
 function writeFailed(e){
   var code = e && e.code;
-  if(code === "quota_exceeded") toast("The desk is full. Delete some closed postings, then try again.", true);
-  else if(code === "revoked"){ useStore(browserStore()); toast("Lost access to the shared desk. Reload the page.", true); }
+  if(code === "quota_exceeded") toast("The job list is full. Delete some closed postings, then try again.", true);
+  else if(code === "revoked"){ useStore(browserStore()); toast("Lost access to your saved jobs. Reload the page.", true); }
   else toast("A change did not save. Reload the page and check it.", true);
 }
 
@@ -523,7 +523,7 @@ function artifactStore(db){
       }
       return next().then(function(){
         try{ localStorage.setItem(MIGRATED_KEY, "1"); }catch(e){}
-        if(todo.length) toast("Moved " + todo.length + " postings into the shared desk");
+        if(todo.length) toast("Moved " + todo.length + " postings into your saved jobs");
       });
     });
   }
@@ -617,7 +617,7 @@ function useStore(s){
       return;
     }
     useStore(browserStore());
-    toast("Lost connection to the shared desk. Reload to reconnect.", true);
+    toast("Lost connection to your saved jobs. Reload to reconnect.", true);
   });
 }
 function uid(co){
@@ -944,7 +944,7 @@ function copyOpenQuestions(){
     out.push("## " + j.company + " — " + j.title + "  [" + j.id + "]\n" + pending.map(function(p){return "- "+p}).join("\n"));
   });
   if(!out.length){ toast("No open questions"); return; }
-  copy("Questions from the Application Desk:\n\n" + out.join("\n\n"), "Open questions copied");
+  copy("Questions from Seed Change:\n\n" + out.join("\n\n"), "Open questions copied");
 }
 
 /* ============================ PDF ============================ */
@@ -1088,7 +1088,7 @@ function loadFile(file){
       ui.sel = null; renderAll();
       toast("Imported " + incoming.length + " postings");
     }catch(e){
-      toast("That file is not a Desk export", true);
+      toast("That file is not a Seed Change backup", true);
     }
   };
   r.readAsText(file);
@@ -1406,7 +1406,7 @@ document.getElementById("addConfirm").addEventListener("click", function(){
     document.getElementById("addScrim").hidden = true;
     ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";
     renderAll();
-    toast("Already on the desk: " + dup.company + " (" + dup.status + ")");
+    toast("Already saved: " + dup.company + " (" + dup.status + ")");
     return;
   }
   var linkOnly = /^https?:\/\/\S+$/.test(raw.trim());

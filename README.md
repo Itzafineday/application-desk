@@ -1,11 +1,12 @@
-# Application Desk
+# Seed Change
 
 A job application tracker in a single HTML page, built to work alongside an AI
-assistant. You collect postings and make the decisions; Claude reads the same
+assistant. It used to be called Application Desk; the repository keeps that
+name. You collect postings and make the decisions; Claude reads the same
 queue, scores the fit, drafts cover letters and answers your questions, and the
 page updates live.
 
-![The desk: every job with its status, fit score, pay band and flags](docs/screenshots/desk.png)
+![The main screen: every job with its status, fit score, pay band and flags](docs/screenshots/desk.png)
 
 ## What it does
 
