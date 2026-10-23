@@ -1401,6 +1401,119 @@ function showPreview(){
   document.getElementById("addHint").textContent = p.company && p.title ? "" : "Check the fields before adding";
 }
 
+/* ============================ resume reader ============================ */
+/* Turns resume text (pasted, or read from a PDF or Word file) into the
+   profile's fields. It only has to get close: the person checks every field
+   before saving, and the whole text is kept as `resume` for Claude. */
+var RESUME_HEADINGS = {
+  summary: /^((professional |career )?summary|(professional )?profile|about( me)?|(career )?objective|overview|((summary|highlights) of )?qualifications|highlights)$/,
+  skills: /^(((technical|core|key|professional|relevant) )?skills( (and|&) [a-z ]+)?|(core )?competencies|areas of expertise|expertise|technologies|tools and technologies|technical proficiencies)$/,
+  experience: /^(((professional|work|relevant|employment|career) )?(experience|history)|employment)$/,
+  other: /^(education( (and|&) training)?|training|certifications?|certificates|licen[cs]es( (and|&) certifications)?|certifications? (and|&) training|projects|(volunteer|community)( experience| work)?|volunteering|awards|honou?rs|achievements|references|interests|hobbies|languages|publications|courses|activities|affiliations|memberships)$/
+};
+// Bullet marks, including the private-use glyphs Word's symbol font leaves in PDFs.
+var BULLET_MARK = "•·▪●◦‣∙○■□➢►✓✔*";
+var BULLET = new RegExp("^([" + BULLET_MARK + "]|[-–—](?=\\s|$))\\s*");
+var BULLET_ONLY = new RegExp("^[" + BULLET_MARK + "]$");
+var RESUME_SEP = /\s+[|•·▪●◆]\s+/;
+
+function resumeHeading(line){
+  var l = line;
+  if(/^([A-Za-z] ){3,}[A-Za-z]$/.test(l)) l = l.replace(/ /g, "");   // "S K I L L S"
+  if(l.length > 40 || /[.!?,;]$/.test(l)) return null;
+  l = l.toLowerCase().replace(/:$/, "").replace(/[^a-z& ]+/g, " ").replace(/\s+/g, " ").trim();
+  for(var k in RESUME_HEADINGS){ if(RESUME_HEADINGS[k].test(l)) return k; }
+  return null;
+}
+/* An email, phone number, link, or a bare "City, BC" line. */
+function contactish(l){
+  return /\S+@\S+\.\S+/.test(l) || /\b\d{3}[ .-]\d{4}\b/.test(l)
+    || /(https?:\/\/|www\.|linkedin\.com|github\.com)/i.test(l)
+    || /^[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}( [A-Z]\d[A-Z] ?\d[A-Z]\d)?$/.test(l);
+}
+function nameLike(l){
+  var words = l.split(" ").length;
+  return words >= 2 && words <= 5 && l.length <= 50
+    && /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’.,\- ]+$/.test(l) && !resumeHeading(l);
+}
+/* "JORDAN O'NEIL-EXAMPLE" -> "Jordan O'Neil-Example"; mixed case is kept. */
+function nameCase(l){
+  if(l !== l.toUpperCase()) return l;
+  return l.toLowerCase().replace(/(^|[\s'’\-])([a-zà-öø-ÿ])/g, function(m, a, b){ return a + b.toUpperCase(); });
+}
+function skillText(lines){
+  return lines.map(function(l){
+    return l.replace(BULLET, "").replace(new RegExp(RESUME_SEP.source, "g"), ", ").trim();
+  }).filter(Boolean).join("\n");
+}
+/* Bullets become "- ", a bullet's wrapped second line joins it, and a blank
+   line goes before each role (a plain line that follows bullets). */
+function experienceText(lines){
+  var out = [], prevBullet = false, nextIsBullet = false;
+  lines.forEach(function(l){
+    if(BULLET_ONLY.test(l)){ nextIsBullet = true; return; }   // a mark on a line of its own
+    var isBullet = nextIsBullet || BULLET.test(l);
+    var text = l.replace(BULLET, "");
+    nextIsBullet = false;
+    if(!isBullet && prevBullet && /^[a-z(]/.test(text)){ out[out.length-1] += " " + text; return; }
+    if(!isBullet && prevBullet) out.push("");
+    out.push(isBullet ? "- " + text : text);
+    prevBullet = isBullet;
+  });
+  return out.join("\n");
+}
+function parseResume(text){
+  var lines = String(text || "").replace(/\r/g, "").split("\n").map(function(l){
+    return l.replace(/\s+/g, " ").trim();
+  }).filter(function(l){ return l && !/^page \d+( of \d+)?$/i.test(l); });
+
+  var sec = {top:[], summary:[], skills:[], experience:[], other:[]}, cur = "top";
+  lines.forEach(function(l){
+    var h = resumeHeading(l);
+    if(h) cur = h; else sec[cur].push(l);
+  });
+
+  var out = {name:"", headline:"", skills:skillText(sec.skills), experience:experienceText(sec.experience)};
+  // The name: one of the first lines, before any contact details on it.
+  var top = sec.top, at = -1;
+  for(var i=0; i<top.length && i<6; i++){
+    if(/^(curriculum vitae|r[eé]sum[eé]|cv)$/i.test(top[i])) continue;
+    var first = top[i].split(RESUME_SEP)[0];
+    if(!contactish(first) && nameLike(first)){ out.name = nameCase(first); at = i; break; }
+  }
+  // The headline: a short line just under the name, without contact details.
+  for(var k=at+1; k<top.length && k<=at+3; k++){
+    var parts = top[k].split(RESUME_SEP), keep = [];
+    for(var p=0; p<parts.length && !contactish(parts[p]); p++) keep.push(parts[p]);
+    var line = keep.join(" | ");
+    if(line.length >= 3 && line.length <= 120){ out.headline = line; break; }
+  }
+  // Or the summary's first sentence, if it is short enough to read as one.
+  if(!out.headline && sec.summary.length){
+    var s = sec.summary.join(" ").replace(BULLET, "").match(/^.*?[.!?](\s|$)/);
+    s = (s ? s[0] : sec.summary[0]).trim();
+    if(s.length <= 160) out.headline = s;
+  }
+  return out;
+}
+/* One page of pdf.js text items as lines: a new line wherever the baseline
+   moves or pdf.js marks an end of line, and a space where items have a gap. */
+function pdfPageText(items){
+  var lines = [], line = "", lastY = null, lastEnd = null;
+  items.forEach(function(it){
+    if(typeof it.str !== "string") return;
+    var x = it.transform[4], y = it.transform[5];
+    if(lastY !== null && Math.abs(y - lastY) > 2){ lines.push(line); line = ""; lastEnd = null; }
+    else if(lastEnd !== null && x - lastEnd > 1 && line && !/\s$/.test(line) && !/^\s/.test(it.str)) line += " ";
+    line += it.str;
+    lastY = y; lastEnd = x + (it.width || 0);
+    if(it.hasEOL){ lines.push(line); line = ""; lastY = null; lastEnd = null; }
+  });
+  if(line) lines.push(line);
+  return lines.map(function(l){ return l.replace(/\s+/g, " ").trim(); }).join("\n")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /* ============================ events ============================ */
 document.getElementById("headrow").addEventListener("click", function(e){
   var th = e.target.closest("th"); if(!th) return;

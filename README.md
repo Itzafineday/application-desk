@@ -71,11 +71,12 @@ backups.
 
 ## Development
 
-- No build step. The app is `public/index.html`; the tests read the parser
+- No build step. The app is `public/index.html`; the tests read the parsers
   straight out of it.
 - Run the tests with `node --test` (Node 18 or later, nothing to install). Any
-  change to the paste parser needs a fixture in `tests/fixtures/`, and fixtures
-  are always invented, never a real posting.
+  change to the paste parser or the resume reader needs a fixture in
+  `tests/fixtures/`, and fixtures are always invented, never a real posting or
+  resume.
 - Read [AGENTS.md](AGENTS.md) before contributing. It covers the privacy rules,
   the pre-commit hook and the deploy checklist, for people and AI agents alike.
 - [docs/roadmap.md](docs/roadmap.md) has what's done, what's next and the

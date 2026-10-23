@@ -56,10 +56,12 @@ and only with the owner's OK. Commit first, then:
 - `public/index.html`: the whole app (styles, markup, script).
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
-- `public/sample-data.json`: fictional jobs for the demo and for tests.
-- `tests/`: parser tests on fictional pastes (`node --test`, no install
-  needed). Run them before committing any change to the paste parser, and add
-  a fixture for each new layout. Fixtures must be invented, never a real posting.
+- `public/sample-data.json`: fictional jobs and profile for the demo and for
+  tests.
+- `tests/`: tests for the paste parser and the resume reader, on fictional
+  text (`node --test`, no install needed). Run them before committing any
+  change to either, and add a fixture for each new layout. Fixtures must be
+  invented, never a real posting or a real resume.
 - `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
   dated export file and keeps the newest 30 (see Backups).
 
