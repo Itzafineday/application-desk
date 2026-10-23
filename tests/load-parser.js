@@ -10,5 +10,5 @@ module.exports = function loadParser() {
   const end = html.indexOf("function showPreview(){");
   if (start < 0 || end < start) throw new Error("paste parser section not found in public/index.html");
   return new Function(html.slice(start, end) +
-    "\nreturn { parsePaste: parsePaste, linkedinId: linkedinId, indeedKey: indeedKey, jobRef: jobRef };")();
+    "\nreturn { parsePaste: parsePaste, linkedinId: linkedinId, indeedKey: indeedKey, jobRef: jobRef, findDuplicate: findDuplicate };")();
 };

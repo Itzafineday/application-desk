@@ -56,11 +56,14 @@ and only with the owner's OK. Commit first, then:
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
 - `public/sample-data.json`: fictional jobs for the demo and for tests.
-- `tests/`: parser tests on fictional pastes (`node --test`, no install
-  needed). Run them before committing any change to the paste parser, and add
+- `tests/`: parser and script tests on fictional pastes (`node --test`, no
+  install needed). Run them before committing any change to the paste parser, and add
   a fixture for each new layout. Fixtures must be invented, never a real posting.
 - `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
   dated export file and keeps the newest 30 (see Backups).
+- `scripts/saved-jobs.js`: checks saved jobs against a listing of `jobs` and
+  turns saved job pages into new job documents (see Saved jobs).
+- `.claude/skills/`: Claude workflows for this repo.
 
 ## Working with the live data
 Only Claude, signed in as the owner, can reach the shared database (claude.ai
@@ -84,6 +87,18 @@ the page's Import can restore it. It refuses to write when the listing is
 empty or unreadable, warns when the job count drops by more than a fifth, and
 only rotates files with exactly that name. Run it from one machine: two
 machines writing the same synced folder create conflict copies.
+
+## Saved jobs
+The page can't sign in to LinkedIn or Indeed, so picking up the jobs the
+owner marked Saved there is a Claude workflow: the `sync-saved-jobs` skill
+(`.claude/skills/sync-saved-jobs/SKILL.md`). Claude reads the saved lists
+with Claude in Chrome, opens each job the Desk doesn't have yet, and saves its
+page text to a scratch folder. `node scripts/saved-jobs.js check` and `build`
+then apply the page's own parser and duplicate rule (`parsePaste`,
+`findDuplicate`) and write new job documents with status `queued`. After a
+backup into the backup folder's `pre-sync` subfolder and the owner's go,
+Claude creates them with one ArtifactData batch. It never changes anything on
+the job sites and never edits or deletes a job already on the Desk.
 
 ## Conventions
 - Small commits, one concern each, imperative mood ("Add Indeed parser").

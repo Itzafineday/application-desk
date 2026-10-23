@@ -8,7 +8,7 @@ const path = require("path");
 
 // Pin "now" so "1 week ago" always resolves to the same date.
 Date.now = () => new Date(2026, 9, 15, 12, 0, 0).getTime();
-const { parsePaste, linkedinId, indeedKey, jobRef } = require("./load-parser")();
+const { parsePaste, linkedinId, indeedKey, jobRef, findDuplicate } = require("./load-parser")();
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
 
@@ -105,4 +105,64 @@ test("indeedKey and jobRef identify the same job across link styles", () => {
   assert.deepEqual(jobRef("https://ca.indeed.com/viewjob?jk=0123456789abcdef"), { site: "Indeed", id: "0123456789abcdef" });
   assert.deepEqual(jobRef("https://www.linkedin.com/jobs/view/4000000004/"), { site: "LinkedIn", id: "4000000004" });
   assert.equal(jobRef("https://jobs.example.com/postings/1234"), null);
+});
+
+test("findDuplicate: same link, same job id on either site, or same company and title", () => {
+  const desk = [
+    { id: "a", company: "Northgate Robotics", title: "Senior Cloud Engineer", url: "https://www.linkedin.com/jobs/view/4000000001/" },
+    { id: "b", company: "Kestrel Water Systems", title: "Senior Infrastructure Specialist", url: "https://ca.indeed.com/viewjob?jk=0123456789abcdef" },
+    { id: "c", company: "Harbourline Credit Union", title: "Sr Manager - IT Operations", url: "" },
+  ];
+  const why = (p) => { const d = findDuplicate(desk, p); return d && d.job.id + ": " + d.why; };
+  assert.equal(why({ url: "https://www.linkedin.com/jobs/view/4000000001/" }), "a: same link");
+  assert.equal(why({ url: "https://www.linkedin.com/jobs/view/4000000001/?refId=x" }), "a: same LinkedIn job");
+  assert.equal(why({ url: "https://ca.indeed.com/?vjk=0123456789abcdef" }), "b: same Indeed job");
+  assert.equal(why({ url: "https://jobs.example.com/1", company: "Harbourline Credit Union", title: "Sr. Manager, IT Operations" }),
+    "c: same company and title");
+  assert.equal(findDuplicate(desk, { url: "https://www.linkedin.com/jobs/view/4000000009/", company: "Northgate Robotics", title: "Cloud Architect" }), null);
+  assert.equal(findDuplicate(desk, { url: "", company: "", title: "" }), null);
+});
+
+test("LinkedIn: job page text reads the posting, not the profile or More jobs below it", () => {
+  const p = parsePaste(fixture("linkedin-page-text.txt"));
+  assert.equal(p.company, "Larchmont Analytics");
+  assert.equal(p.title, "Senior Systems Administrator");
+  assert.equal(p.location, "Vancouver, BC");
+  assert.equal(p.posted, "2026-10-08");
+  assert.equal(p.band, "");                         // not a More jobs card's pay
+  assert.equal(p.source, "LinkedIn");
+  assert.equal(p.url, "https://www.linkedin.com/jobs/view/4000000010/");
+  assert.match(p.posting, /^https:\/\/www\.linkedin\.com\/jobs\/view\/4000000010\/\nLarchmont Analytics\n/);
+  assert.match(p.posting, /\nAbout the job\n/);
+  assert.match(p.posting, /legally entitled to work in Canada\.$/);
+  assert.doesNotMatch(p.posting, /School alumni|Tailor my resume|^Saved$|About the company|More jobs|Example Freight|132\.6K|Select language/m);
+});
+
+test("LinkedIn: pay in the posting is read even with other jobs' pay below", () => {
+  const text = fixture("linkedin-page-text.txt").replace("Work Permits\n", "Salary: $110,000 - $135,000 per year.\n\nWork Permits\n");
+  assert.equal(parsePaste(text).band, "$110,000 - $135,000");
+});
+
+test("LinkedIn: company and title come from above the location line, even when the title names a city", () => {
+  const text = fixture("linkedin-page-text.txt")
+    .replace("\nSenior Systems Administrator\n", "\nSenior Systems Administrator - Vancouver, BC\n")
+    .replace("Vancouver, BC · Reposted", "Greater Vancouver Metropolitan Area · Reposted");
+  const p = parsePaste(text);
+  assert.equal(p.company, "Larchmont Analytics");
+  assert.equal(p.title, "Senior Systems Administrator - Vancouver, BC");
+  assert.equal(p.location, "Greater Vancouver Metropolitan Area");
+});
+
+test("LinkedIn: pay chips and pay lines in the forms job pages use", () => {
+  const withPay = (pay) => parsePaste(fixture("linkedin-page-text.txt").replace("Work Permits\n", pay + "\n\nWork Permits\n")).band;
+  const withChip = (chip) => parsePaste(fixture("linkedin-page-text.txt").replace("\nHybrid\n", "\n" + chip + "\nHybrid\n")).band;
+  assert.equal(withChip("32.93 CAD/hr - 38.56 CAD/hr"), "$32.93 - $38.56 an hour (~$68k-$80k/yr)");
+  assert.equal(withChip("$70K/yr - $104.2K/yr"), "$70,000 - $104,200");
+  assert.equal(withPay("The expected range is $192,000 CAD - $240,000 CAD."), "$192,000 - $240,000");
+  assert.equal(withPay("Junior to Intermediate: $25–$35/hr inc."), "$25 - $35 an hour (~$52k-$73k/yr)");
+  assert.equal(withPay("Salary: $42.35 to $46.55 per hour"), "$42.35 - $46.55 an hour (~$88k-$97k/yr)");
+  assert.equal(withPay("A reasonable estimate is CAD $95,000 - $128,000."), "$95,000 - $128,000");
+  assert.equal(withPay("The base pay range is $100,220.00 - $197,758.00 CAD."), "$100,220 - $197,758");
+  assert.equal(withPay("The range for this role is 60,692.25 - 80,923.00 CAD Annual."), "$60,692 - $80,923");
+  assert.equal(withPay("Salary Range\n\n$75,000 to $90,000"), "$75,000 - $90,000");   // a bare pay line
 });
