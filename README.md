@@ -37,6 +37,10 @@ page updates live.
   <img src="docs/screenshots/questions.png" width="32%" alt="A question thread with Claude's answer">
   <img src="docs/screenshots/add-indeed.png" width="32%" alt="Adding a job from a pasted Indeed search page">
 </p>
+<p>
+  <img src="docs/screenshots/get-started.png" width="49%" alt="The profile read from a resume, open for checking">
+  <img src="docs/screenshots/help-me-apply.png" width="49%" alt="A company form's questions with Claude's draft answers">
+</p>
 
 ## How it works
 
