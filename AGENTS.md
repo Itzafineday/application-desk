@@ -1,6 +1,7 @@
-# Application Desk: instructions for agents working on this repo
+# Seed Change: instructions for agents working on this repo
 
-A job application tracker in one HTML page: paste a posting, track its status,
+Seed Change (formerly Application Desk; the repo keeps the old name) is a job
+application tracker in one HTML page: paste a posting, track its status,
 score the fit, draft a cover letter and save it as a PDF, and keep a question
 thread per job. No build step.
 
@@ -55,10 +56,12 @@ and only with the owner's OK. Commit first, then:
 - `public/index.html`: the whole app (styles, markup, script).
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
-- `public/sample-data.json`: fictional jobs for the demo and for tests.
-- `tests/`: parser tests on fictional pastes (`node --test`, no install
-  needed). Run them before committing any change to the paste parser, and add
-  a fixture for each new layout. Fixtures must be invented, never a real posting.
+- `public/sample-data.json`: fictional jobs and profile for the demo and for
+  tests.
+- `tests/`: tests for the paste parser, the resume reader and the form
+  question splitter, on fictional text (`node --test`, no install needed). Run
+  them before committing any change to these, and add a fixture for each new
+  layout. Fixtures must be invented, never a real posting, resume or form.
 - `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
   dated export file and keeps the newest 30 (see Backups).
 
@@ -70,6 +73,9 @@ artifact tools). Other agents work on code and sample data only.
 - Questions: append `{ id, ts, who: "claude", text }` to `questions`. Never
   edit, remove or reorder existing entries, and leave `qSeen` alone (the page
   sets it when the owner reads the thread).
+- Help me apply: draft answers into `answer` on the entries in a job's `form`,
+  from the profile (`profile/me`) and the posting. Never remove or reorder
+  entries. Never submit an application, or anything else, on a company site.
 - Pin every write to the document version you read, so a change made in the
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection

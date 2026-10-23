@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Packs a listing of the `jobs` collection (one JSON file per job, as Claude
-// saves it with an ArtifactData "list" and an out_dir) into one dated Desk
-// export, then keeps only the newest daily backups.
+// saves it with an ArtifactData "list" and an out_dir) into one dated Seed
+// Change export, then keeps only the newest daily backups.
 //
 //   node scripts/pack-backup.js <jobs-dir> <backup-dir> [--keep 30] [--date YYYY-MM-DD]
 //
@@ -100,7 +100,7 @@ function main() {
     `Keeping ${kept} daily backups; removed ${removed.length}.`);
   if (previousCount && jobs.length < previousCount * 0.8) {
     console.log(`WARNING: the job count fell from ${previousCount} to ${jobs.length}. ` +
-      `Check the Desk before older backups rotate out.`);
+      `Check Seed Change before older backups rotate out.`);
   }
 }
 

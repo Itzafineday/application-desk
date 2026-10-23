@@ -1,0 +1,34 @@
+JORDAN EXAMPLE
+Systems Administrator | Hybrid Cloud, Identity and Automation
+Example City, BC | 555-0100 | jordan@example.com | linkedin.com/in/jordan-example
+
+SUMMARY
+Systems administrator with six years of experience running hybrid Windows and Linux environments for mid-sized organizations. Known for automating routine work, tightening identity and access controls, and writing runbooks people actually use.
+
+SKILLS
+Windows Server, Active Directory, Entra ID
+Linux (Ubuntu, RHEL), Bash, PowerShell
+VMware vSphere, Hyper-V, Azure
+Terraform, Ansible, Git
+Microsoft 365, Intune, conditional access
+Monitoring and alerting, backup and recovery, incident response
+
+EXPERIENCE
+Systems Administrator
+Mossbank Freight Lines, Example City, BC | 2022 - present
+• Run 140 virtual servers across two sites and an Azure tenant for 600 staff.
+• Moved server builds to Terraform and Ansible, cutting a new server from two days to an hour.
+• Rolled out conditional access and phishing-resistant sign-in for all staff.
+
+IT Support Analyst
+Rainshadow College, Example City, BC | 2019 - 2022
+• First and second line support for 1,200 staff and students.
+• Wrote the PowerShell scripts that automated account setup and leavers.
+• Led the move of 300 laptops to Intune.
+
+EDUCATION
+Diploma, Computer Systems Technology
+Rainshadow College | 2019
+
+CERTIFICATIONS
+Azure Administrator Associate
