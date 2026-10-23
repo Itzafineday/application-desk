@@ -77,6 +77,14 @@ green dot and **Synced with Claude**.
 You can also paste just the job's link. Claude can fill in the details later.
 If the job is already on your Desk, it tells you rather than adding it twice.
 
+**Or let Claude collect them.** If you have the Claude browser extension
+(Claude in Chrome), click **Save** on jobs you like on LinkedIn or Indeed,
+then tell Claude in the Code tab: "Pull my saved Indeed jobs into my
+Application Desk." Claude opens your saved list in your browser, reads each
+posting, and adds the ones that aren't on your Desk yet. It only reads the
+job sites; it doesn't apply or change anything there. Use a browser profile
+where you're signed in to your own job-site account.
+
 ## Using it day to day
 
 The Desk is built to work with Claude. In the Code tab, you can say things
