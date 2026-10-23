@@ -57,6 +57,9 @@ sample data.
 
 ## Run your own
 
+New to all this? [docs/SETUP.md](docs/SETUP.md) walks through it step by step,
+no GitHub or coding needed.
+
 Ask Claude to publish `public/index.html` as an artifact with the `db` and
 `downloads` capabilities (where your plan offers artifact databases). Open it,
 paste a few postings, then ask Claude in chat to score them or draft a letter,
