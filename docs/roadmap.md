@@ -22,6 +22,25 @@ artifact's shared database.
 | 2026-10-15 | c7b14a1 | 6 | Indeed pastes (search-results layout) and duplicate checks across sites. Job data checked identical before and after. |
 | (not logged) | f7e8dad | 1792095823-dee4 | Indeed share links and the job's own page. Found live on 2026-10-22, matching `main` byte for byte. |
 
+## Next: v4 (queued 2026-10-23)
+Rule for all of it: the main screen stays as it is. New features live behind
+one optional "Get started" flow and a button on each job, so features people
+rarely use don't clutter the page.
+
+1. **Onboarding (optional, skippable).** Import an existing resume (PDF, Word
+   or pasted text) into a profile that Claude uses for fit scores, letters and
+   answers. At the end it offers the polisher and the practice interview.
+2. **Resume polisher.** Suggestions for one target job or in general. Keeps
+   versions and saves a PDF.
+3. **Practice interview (optional).** A simulated HR or work-placement
+   interview that draws out experience the resume misses and adds it to the
+   profile.
+4. **Application assist.** A "Help me apply" button on each job, for company
+   sites that have their own long forms and questions. Claude drafts answers
+   from the profile. With the browser extension it can fill the form for the
+   user to review. It never submits by itself.
+5. **A better name** (candidates in issue #1).
+
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
   so the app can run outside claude.ai and install on a phone. The page's
