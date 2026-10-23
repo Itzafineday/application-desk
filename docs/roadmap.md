@@ -39,7 +39,7 @@ rarely use don't clutter the page.
    sites that have their own long forms and questions. Claude drafts answers
    from the profile. With the browser extension it can fill the form for the
    user to review. It never submits by itself.
-5. **A better name** (candidates in issue #1).
+5. **A better name** (candidates in issue #2).
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
