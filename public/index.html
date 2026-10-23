@@ -1513,7 +1513,7 @@ var RESUME_HEADINGS = {
   other: /^(education( (and|&) training)?|training|certifications?|certificates|licen[cs]es( (and|&) certifications)?|certifications? (and|&) training|projects|(volunteer|community)( experience| work)?|volunteering|awards|honou?rs|achievements|references|interests|hobbies|languages|publications|courses|activities|affiliations|memberships)$/
 };
 // Bullet marks, including the private-use glyphs Word's symbol font leaves in PDFs.
-var BULLET_MARK = "•·▪●◦‣∙○■□➢►✓✔*";
+var BULLET_MARK = "•·▪●◦‣∙○■□➢►✓✔*\uf0a7\uf0b7\uf076\uf0d8\uf0fc";
 var BULLET = new RegExp("^([" + BULLET_MARK + "]|[-–—](?=\\s|$))\\s*");
 var BULLET_ONLY = new RegExp("^[" + BULLET_MARK + "]$");
 var RESUME_SEP = /\s+[|•·▪●◆]\s+/;

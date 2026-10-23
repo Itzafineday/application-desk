@@ -44,6 +44,7 @@ test("Resume: the demo profile is what Get started makes of the same resume", ()
 });
 
 test("Resume: PDF text with spaced-out headings, symbol bullets and wrapped lines", () => {
+  // The fixture has U+F0B7, the bullet Word's Symbol font leaves in PDFs, on lines of its own.
   const r = parseResume(fixture("resume-pdf-text.txt"));
   assert.equal(r.name, "Riley Sample");                  // contact details on the same line are dropped
   assert.equal(r.headline, "Network analyst who keeps small offices online.");   // from the summary
