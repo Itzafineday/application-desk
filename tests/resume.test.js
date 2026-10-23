@@ -60,6 +60,26 @@ test("Resume: PDF text with spaced-out headings, symbol bullets and wrapped line
   ].join("\n"));
 });
 
+test("Resume: PDF text whose bullets were drawn as shapes, with wrapped lines", () => {
+  const r = parseResume([
+    "Casey Placeholder", "Experience",
+    "Line Cook, Example Bistro, 2022 – Present",
+    "Ran the grill station on weekend dinner services of up to 180",
+    "covers.",
+    "Trained two new cooks.",
+    "Prep Cook, Example Diner, 2020 – 2022",
+    "Kept prep lists and stock rotation for a 60-seat room.",
+  ].join("\n"));
+  assert.equal(r.experience, [
+    "Line Cook, Example Bistro, 2022 – Present",
+    "- Ran the grill station on weekend dinner services of up to 180 covers.",
+    "- Trained two new cooks.",
+    "",
+    "Prep Cook, Example Diner, 2020 – 2022",
+    "- Kept prep lists and stock rotation for a 60-seat room.",
+  ].join("\n"));
+});
+
 test("Resume: Word text with a title line, other heading names and volunteer work", () => {
   const r = parseResume(fixture("resume-word-text.txt"));
   assert.equal(r.name, "Sam Q. Fictional");

@@ -1476,19 +1476,27 @@ function skillText(lines){
     return l.replace(BULLET, "").replace(new RegExp(RESUME_SEP.source, "g"), ", ").trim();
   }).filter(Boolean).join("\n");
 }
-/* Bullets become "- ", a bullet's wrapped second line joins it, and a blank
-   line goes before each role (a plain line that follows bullets). */
+/* Bullets become "- ", a line wrapped onto the next joins it again, and a
+   blank line goes before each role (a plain line that follows bullets). */
 function experienceText(lines){
-  var out = [], prevBullet = false, nextIsBullet = false;
+  var items = [], nextIsBullet = false;
   lines.forEach(function(l){
     if(BULLET_ONLY.test(l)){ nextIsBullet = true; return; }   // a mark on a line of its own
-    var isBullet = nextIsBullet || BULLET.test(l);
-    var text = l.replace(BULLET, "");
+    var isBullet = nextIsBullet || BULLET.test(l), text = l.replace(BULLET, "");
+    var prev = items[items.length-1];
     nextIsBullet = false;
-    if(!isBullet && prevBullet && /^[a-z(]/.test(text)){ out[out.length-1] += " " + text; return; }
-    if(!isBullet && prevBullet) out.push("");
-    out.push(isBullet ? "- " + text : text);
-    prevBullet = isBullet;
+    if(!isBullet && prev && /^[a-z(]/.test(text) && !/[.!?:]$/.test(prev.text)){ prev.text += " " + text; return; }
+    items.push({text:text, bullet:isBullet});
+  });
+  // Some PDFs draw bullets as shapes, leaving no marks in the text. Then a
+  // line that ends like a sentence is read as a bullet, the rest as roles.
+  if(!items.some(function(it){ return it.bullet; })){
+    items.forEach(function(it){ it.bullet = /[.!?]$/.test(it.text); });
+  }
+  var out = [];
+  items.forEach(function(it, i){
+    if(!it.bullet && i && items[i-1].bullet) out.push("");
+    out.push(it.bullet ? "- " + it.text : it.text);
   });
   return out.join("\n");
 }
