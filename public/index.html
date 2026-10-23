@@ -385,6 +385,9 @@ var STATUSES = ["queued","working","applied","interview","offer","closed"];
 var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
   "fit","notes","posting","letter","questions","qSeen","created"];
+/* The profile is one document, filled in by Get started or by Claude. These
+   fields are plain text; any others a document carries are kept as they are. */
+var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -393,9 +396,11 @@ var DEMO = !(window.claude && window.claude.use);
 
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
+var profilePending = null; // profile fields changed here and not yet written
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
+state.profile = DEMO ? null : readCachedProfile();   // null until there is one
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -406,9 +411,28 @@ function readLocal(key){
     return (p && Array.isArray(p.jobs) && p.jobs.length) ? p.jobs : null;
   }catch(e){ return null; }
 }
+function readCachedProfile(){
+  try{
+    var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    return p ? normProfile(p.profile) : null;
+  }catch(e){ return null; }
+}
+/* A profile document, with its text fields as strings, or null for none. */
+function normProfile(p){
+  if(!p || typeof p !== "object" || Array.isArray(p)) return null;
+  var o = JSON.parse(JSON.stringify(p));
+  PROFILE_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+  return o;
+}
+/* Exports from before v4 carry {name, contact}; only text beyond a name
+   makes a profile worth importing. */
+function profileHasText(p){
+  return !!p && ["headline","skills","experience","resume"].some(function(f){
+    return typeof p[f] === "string" && p[f].trim();
+  });
+}
 function normalize(s){
   s.version = 3;
-  s.profile = s.profile || {name:"", contact:""};
   s.jobs = (s.jobs||[]).map(function(j){
     j.id = j.id || uid(j.company);
     j.company = j.company || "Unknown company";
@@ -436,7 +460,7 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs})); }catch(e){}
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -479,6 +503,22 @@ function removeJob(id){
   if(!store) return;
   store.remove(id).catch(writeFailed);
 }
+/* Change some profile fields, creating the profile if there is none. */
+function saveProfile(fields){
+  var p = state.profile || {};
+  fields.updated = new Date().toISOString();
+  Object.keys(fields).forEach(function(k){ p[k] = fields[k]; });
+  state.profile = normProfile(p);
+  profilePending = profilePending || {};
+  Object.keys(fields).forEach(function(k){ profilePending[k] = fields[k]; });
+  cacheLocal();
+  flushProfile();
+}
+function flushProfile(){
+  if(!store || !profilePending) return; // stays pending until a store is ready
+  var f = profilePending; profilePending = null;
+  store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
+}
 function writeFailed(e){
   var code = e && e.code;
   if(code === "quota_exceeded") toast("The job list is full. Delete some closed postings, then try again.", true);
@@ -488,21 +528,29 @@ function writeFailed(e){
 
 /* ============================ stores ============================ */
 /* Every store has the same shape, so nothing outside this section knows
-   where the jobs are kept:
+   where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost)    deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache); call
-                              onLost(err) if the connection drops for good
+     start(onJobs, onLost, onProfile)
+                              deliver the whole job list now and after every
+                              change, as onJobs(jobs, fromCache), and the
+                              profile the same way, as onProfile(profile or
+                              null, fromCache); call onLost(err) if the
+                              connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
      remove(id)               delete one job                              -> Promise
+     updateProfile(fields, profile)
+                              merge some fields into the profile; `profile`
+                              is the whole profile, for creating it       -> Promise
    A hosted backend later is one more function returning this shape. */
 
-/* The artifact's shared database (the claude.ai "db" capability). */
+/* The artifact's shared database (the claude.ai "db" capability). The jobs
+   are the `jobs` collection; the profile is the one document `profile/me`. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
+  function profileRef(){ return db.doc("profile/me"); }
 
   /* Copy jobs from the old v2 browser record into the shared database, once. */
   function migrate(){
@@ -530,7 +578,11 @@ function artifactStore(db){
 
   return {
     kind: "live",
-    start: function(onJobs, onLost){
+    start: function(onJobs, onLost, onProfile){
+      profileRef().onSnapshot(function(snap){
+        onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
+          snap.metadata.fromCache);
+      }, onLost);
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
       }).then(function(){
@@ -550,7 +602,15 @@ function artifactStore(db){
       });
     },
     put: put,
-    remove: function(id){ return retry(function(){ return ref(id).delete(); }); }
+    remove: function(id){ return retry(function(){ return ref(id).delete(); }); },
+    updateProfile: function(fields, profile){
+      return retry(function(){ return profileRef().update(fields); }).catch(function(e){
+        if(e && e.code === "invalid_argument" && profile){   // no profile yet
+          return retry(function(){ return profileRef().set(profile); });
+        }
+        throw e;
+      });
+    }
   };
 }
 
@@ -558,22 +618,25 @@ function artifactStore(db){
    which cacheLocal() keeps current, so a write has nothing left to do. */
 function browserStore(){
   function done(){ return Promise.resolve(); }
-  return {kind:"local", start:function(){}, update:done, put:done, remove:done};
+  return {kind:"local", start:function(){}, update:done, put:done, remove:done, updateProfile:done};
 }
 
-/* Fictional jobs for trying the page outside claude.ai. Edits stay in the
-   page's memory until it reloads. */
+/* Fictional jobs and profile for trying the page outside claude.ai. Edits
+   stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost){
+    start: function(onJobs, onLost, onProfile){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
-      }).then(function(data){ onJobs((data && data.jobs) || [], false); }, onLost);
+      }).then(function(data){
+        onProfile((data && data.profile) || null, false);
+        onJobs((data && data.jobs) || [], false);
+      }, onLost);
     },
-    update: done, put: done, remove: done
+    update: done, put: done, remove: done, updateProfile: done
   };
 }
 
@@ -618,6 +681,18 @@ function useStore(s){
     }
     useStore(browserStore());
     toast("Lost connection to your saved jobs. Reload to reconnect.", true);
+  }, function(p, fromCache){
+    if(store !== s) return;
+    p = normProfile(p);
+    if(!p && fromCache && state.profile) return;
+    if(profilePending){
+      p = p || {};
+      Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+      p = normProfile(p);
+    }
+    state.profile = p;
+    cacheLocal();
+    flushProfile();
   });
 }
 function uid(co){
@@ -1085,8 +1160,10 @@ function loadFile(file){
         if(at >= 0) state.jobs[at] = j; else state.jobs.push(j);
         create(j);
       });
+      var withProfile = profileHasText(parsed.profile);
+      if(withProfile) saveProfile(normProfile(parsed.profile));
       ui.sel = null; renderAll();
-      toast("Imported " + incoming.length + " postings");
+      toast("Imported " + incoming.length + " postings" + (withProfile ? " and the profile" : ""));
     }catch(e){
       toast("That file is not a Seed Change backup", true);
     }

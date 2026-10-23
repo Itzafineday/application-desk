@@ -1,18 +1,22 @@
 # Data schema
 
-The schema is defined by the live data and by `normalize()` in
-`public/index.html`. Change both together, and record the change here.
+The schema is defined by the live data and by `normalize()` (jobs) and
+`normProfile()` (the profile) in `public/index.html`. Change both together,
+and record the change here.
 
 ## Where the data lives
 
 - **Shared database** (the record): the artifact's `db`, collection `jobs`,
   one document per job. The document id is the job id. The page subscribes to
-  the whole collection (up to 1,000 documents).
+  the whole collection (up to 1,000 documents). The profile is one more
+  document, `profile/me` (collection `profile`, id `me`), which the page
+  subscribes to as well.
 - **Browser cache**: `localStorage["appdesk.v3.cache"]` holds
-  `{ version: 3, jobs }` so the page can draw before the database answers.
-  It is never the record.
-- **Demo** (outside claude.ai): jobs come from `public/sample-data.json` and
-  stay in memory. Nothing is written to the cache.
+  `{ version: 3, jobs, profile }` so the page can draw before the database
+  answers. It is never the record.
+- **Demo** (outside claude.ai): jobs and the profile come from
+  `public/sample-data.json` and stay in memory. Nothing is written to the
+  cache.
 - **Legacy**: `localStorage["appdesk.v2"]` is the v2 record. v3 reads it once,
   copies any missing jobs into the database, then sets
   `localStorage["appdesk.v3.migrated"] = "1"`.
@@ -79,6 +83,28 @@ The PDF layout reads structure from the plain text:
 - The PDF tries three progressively tighter type settings so the letter fits
   on one page before spilling onto a second.
 
+## Profile
+
+One document, `profile/me`, describing the person applying. Get started
+fills it from a resume; Claude reads it for fit scores, letters and answers
+to application forms, and may add to it. There is no profile until one is
+saved: the page treats a missing document as "no profile yet".
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | The person's name, as the resume gives it. A resume's all-caps name is stored in title case. |
+| `headline` | string | One line: the title or summary line under the name. |
+| `skills` | string | Plain text, one group per line. |
+| `experience` | string | Plain text. Each role's lines, with bullets as `- `, and a blank line between roles. |
+| `resume` | string | The whole resume as imported (pasted, or read from a PDF or Word file), up to 60,000 characters, so nothing the fields above leave out is lost. |
+| `updated` | string | ISO 8601 timestamp of the last save from the page. |
+
+All fields are optional; `normProfile()` reads a missing text field as `""`. The
+page writes only the fields that changed (a merge, creating the document if
+there is none), so fields Claude adds are kept. Claude should pin writes to
+the version it read, as for jobs, and leave `resume` alone: it is the source
+text the other fields came from.
+
 ## Export file
 
 "Export backup" saves, and "Import" reads, this shape:
@@ -87,15 +113,19 @@ The PDF layout reads structure from the plain text:
 {
   "version": 3,
   "exported": "2026-10-14",
-  "profile": { "name": "", "contact": "" },
+  "profile": { "name": "", "headline": "", "skills": "", "experience": "", "resume": "" },
   "jobs": [ ]
 }
 ```
 
 - `version` is the schema version (v2 exports used `2`, v1 had only `version`
   and `jobs`). It is not a save counter.
-- `profile` is carried along, but the page no longer uses it: the letter text
-  holds the writer's name and contact line.
+- `profile` is the profile document (above), or `null` when there is none.
+  Exports from before v4, and `scripts/pack-backup.js`, carry
+  `{ "name": "", "contact": "" }` there instead; Import ignores a profile
+  without a headline, skills, experience or resume text. An imported profile
+  replaces the fields it has. The letter text still holds the writer's name
+  and contact line for the PDF.
 - Import merges by `id`: a job with a matching id is replaced, others are added.
 
 `public/sample-data.json` uses the export shape, with fictional jobs only.
