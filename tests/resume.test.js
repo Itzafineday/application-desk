@@ -9,7 +9,7 @@ const path = require("path");
 const { loadSection } = require("./load-parser");
 
 const { parseResume, pdfPageText } = loadSection(
-  "/* ============================ resume reader", "/* ============================ events",
+  "/* ============================ resume reader", "/* ============================ get started",
   ["parseResume", "pdfPageText"]);
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");

@@ -101,6 +101,10 @@ reloading.
 
 In the page itself:
 
+- **Get started** (top of the page, optional): paste your resume or pick a
+  PDF or Word file, check what was read, and save it as your profile. Claude
+  then uses it when scoring jobs and writing letters. Once saved, the button
+  says **Profile**, and you can change it there any time.
 - **Status:** open a job and set it to Queued, Working, Applied, Interview,
   Offer or Closed. **Mark applied today** records today's date.
 - **Letter tab:** edit the cover letter, then **Save PDF**. The PDF is kept to

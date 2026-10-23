@@ -14,6 +14,9 @@ and record the change here.
 - **Browser cache**: `localStorage["appdesk.v3.cache"]` holds
   `{ version: 3, jobs, profile }` so the page can draw before the database
   answers. It is never the record.
+- **Get started**: `localStorage["appdesk.v4.getstarted"] = "skipped"`
+  remembers that Get started was skipped in this browser, so it doesn't open
+  by itself again. It is not data and is never exported.
 - **Demo** (outside claude.ai): jobs and the profile come from
   `public/sample-data.json` and stay in memory. Nothing is written to the
   cache.

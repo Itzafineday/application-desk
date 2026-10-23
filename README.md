@@ -22,6 +22,11 @@ page updates live.
   clean of em dashes in one click, and save as a PDF that fits on one page.
 - **Ask about a job.** Each job has a question thread. Add a question, mention
   it in chat, and the answer shows up in the thread.
+- **Start from your resume (optional).** **Get started** reads a resume you
+  paste, or a PDF or Word file you pick, into a profile: name, headline, skills
+  and experience, which you check before saving. Claude uses it for fit scores,
+  letters and application answers. It opens by itself once when there is no
+  profile yet, and every step can be skipped.
 
 <p>
   <img src="docs/screenshots/letter.png" width="32%" alt="A job's cover letter, open for editing">
@@ -33,7 +38,8 @@ page updates live.
 
 The page is published as a [Claude](https://claude.ai) artifact with two
 capabilities: a shared database (`db`) and file downloads (`downloads`). Jobs
-live in the database, one document per job, and the page subscribes to them.
+live in the database, one document per job, next to one profile document,
+and the page subscribes to them.
 Claude, signed in as the same person, reads and writes those documents with its
 artifact tools, so a fit score or an answer it writes appears in the open page
 without a reload.
