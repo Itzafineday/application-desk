@@ -257,8 +257,9 @@ never clicks Edit, Save, Apply or anything else that changes the site.
 - `resumes` holds the resume versions (above), oldest first.
   `scripts/pack-backup.js` writes them from a listing of `resumes` when given
   `--resumes`. Exports from before the polisher have none. Import adds the versions not already there, by `id`.
-- `documents` and `guides` hold those collections. Import replaces an item
-  with the same `id` and adds the rest.
+- `documents` and `guides` hold those collections, from listings given to
+  `scripts/pack-backup.js` as `--documents` and `--guides`. Import replaces an
+  item with the same `id` and adds the rest.
 - Import merges jobs by `id`: a job with a matching id is replaced, others are added.
 
 `public/sample-data.json` uses the export shape, with fictional data only.

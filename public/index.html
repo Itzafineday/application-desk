@@ -1511,15 +1511,16 @@ function loadFile(file){
       var versions = normItems("resumes", parsed.resumes).filter(function(r){ return !known[r.id]; });
       versions.forEach(function(r){ saveItem("resumes", r); });
       // Documents and guides change in place: a matching id is replaced, like a job.
-      var others = 0;
-      ["documents","guides"].forEach(function(coll){
-        normItems(coll, parsed[coll]).forEach(function(r){ saveItem(coll, r); others++; });
+      var others = {documents:0, guides:0};
+      Object.keys(others).forEach(function(coll){
+        normItems(coll, parsed[coll]).forEach(function(r){ saveItem(coll, r); others[coll]++; });
       });
       ui.sel = null; renderAll();
       var parts = [incoming.length + " postings"];
       if(withProfile) parts.push("the profile");
       if(versions.length) parts.push(versions.length + " resume version" + (versions.length > 1 ? "s" : ""));
-      if(others) parts.push(others + " document" + (others > 1 ? "s" : "") + " and guide" + (others > 1 ? "s" : ""));
+      if(others.documents) parts.push(others.documents + " document" + (others.documents > 1 ? "s" : ""));
+      if(others.guides) parts.push(others.guides + " guide" + (others.guides > 1 ? "s" : ""));
       var last = parts.pop();
       toast("Imported " + (parts.length ? parts.join(", ") + " and " : "") + last);
     }catch(e){
