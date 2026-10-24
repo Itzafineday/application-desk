@@ -104,6 +104,10 @@ backups.
   change to the paste parser, the resume reader or the form question splitter
   needs a fixture in `tests/fixtures/`, and fixtures are always invented, never
   a real posting, resume or form.
+- Found a bug or have an idea? Click the version next to the name in the app,
+  or open an issue here. [docs/MAINTAINING.md](docs/MAINTAINING.md) explains
+  how reports become releases, and [docs/UPDATING.md](docs/UPDATING.md) how to
+  update your page without losing anything.
 - Read [AGENTS.md](AGENTS.md) before contributing. It covers the privacy rules,
   the pre-commit hook and the deploy checklist, for people and AI agents alike.
 - [docs/roadmap.md](docs/roadmap.md) has what's done, what's next and the
