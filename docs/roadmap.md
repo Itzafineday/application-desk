@@ -39,7 +39,29 @@ rarely use don't clutter the page.
    sites that have their own long forms and questions. Claude drafts answers
    from the profile. With the browser extension it can fill the form for the
    user to review. It never submits by itself.
-5. **A better name** (candidates in issue #2).
+5. **A better name.** Done: **Seed Change** (decided in issue #2). The repo,
+   the database collection (`jobs`), the browser storage keys and the backup
+   file names keep their old names, so nothing existing has to move.
+
+### v4 status (first slice built 2026-10-23, not deployed)
+
+| # | Built | Still to do |
+|---|---|---|
+| 1 | Get started: paste a resume or pick a PDF or Word file, check the fields read from it, save the profile (`profile/me`). Skippable at every step; opens by itself once when there is no profile. | Offer the polisher and the practice interview at the end, once they exist. |
+| 2 | Nothing yet. The profile keeps the imported resume text (`resume`) to start from. | All of it. |
+| 3 | Nothing yet. | All of it. |
+| 4 | Help me apply tab: paste a company form's questions, saved on the job as `form`; Claude drafts each `answer`, shown with a Copy button. | Filling the form through the browser extension for the user to review. |
+| 5 | Renamed. | Nothing. |
+
+Before the first v4 deploy:
+- Check that the two readers load in the published page: pdf.js 3.11.174 and
+  mammoth 1.11.0 from cdnjs. They load only when a file is picked, and the
+  page says so if they don't; pasting text always works.
+- `scripts/pack-backup.js` now packs the profile when given `--profile`, but
+  the daily backup task on the owner's machine still lists only `jobs`. Have
+  it list `profile` too and pass `--profile <listing>/profile` (see Backups
+  in AGENTS.md).
+- Get started will open once for the owner, since there is no profile yet.
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
