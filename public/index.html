@@ -74,7 +74,9 @@ header{
 .brand .ver{
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
   color:var(--faint);letter-spacing:.08em;text-transform:uppercase;
+  background:none;border:0;padding:2px 3px;border-radius:3px;
 }
+.brand .ver:hover{color:var(--accent);background:var(--surface-2)}
 .stats{display:flex;gap:0;margin-left:auto;flex-wrap:wrap}
 .stat{
   padding:0 14px;border-left:1px solid var(--line-soft);
@@ -366,7 +368,7 @@ textarea.note{min-height:110px;font-size:13px}
   <header>
     <div class="brand">
       <h1>Seed Change</h1>
-      <span class="ver">v4</span>
+      <button class="ver" id="btnAbout" title="About Seed Change, and how to send feedback">v4</button>
       <span class="sync" id="sync" data-s="connecting">Connecting…</span>
     </div>
     <div class="stats" id="stats"></div>
@@ -446,6 +448,24 @@ textarea.note{min-height:110px;font-size:13px}
   </div>
 </div>
 
+<div class="scrim" id="aboutScrim" hidden>
+  <div class="modal gs" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" style="width:min(520px,100%)">
+    <header><h2 id="aboutTitle">Seed Change</h2><span class="hint" id="aboutVer"></span></header>
+    <div class="body">
+      <p class="lead">Found a bug, or have an idea? Tell us on GitHub. Reports are public, so leave out your job
+        details, letters, references and anything else personal.</p>
+      <div class="rowbtns">
+        <a class="btn primary sm" id="aboutBug" target="_blank" rel="noopener">Report a bug ↗</a>
+        <a class="btn sm" id="aboutIdea" target="_blank" rel="noopener">Suggest a feature ↗</a>
+        <a class="btn ghost sm" id="aboutNew" target="_blank" rel="noopener">What's new ↗</a>
+      </div>
+      <p class="hint">To update, ask Claude: “Update my Seed Change to the latest release.” It backs up your
+        data first and keeps the same link, so everything you have stays where it is.</p>
+    </div>
+    <div class="foot"><button class="btn primary" id="aboutClose">Close</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -461,6 +481,10 @@ textarea.note{min-height:110px;font-size:13px}
 var V2_KEY = "appdesk.v2";
 var CACHE_KEY = "appdesk.v3.cache";
 var MIGRATED_KEY = "appdesk.v3.migrated";   // gitleaks:allow (a storage key name, not a secret)
+/* The release this page is. Bump it with each release (docs/MAINTAINING.md):
+   feedback links carry it, so a report says which version it is about. */
+var APP_VERSION = "4.1.0";
+var REPO_URL = "https://github.com/Itzafineday/application-desk";
 var STATUSES = ["queued","working","applied","interview","offer","closed"];
 var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
@@ -2904,6 +2928,18 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   toast("Added " + j.company);
 });
 document.getElementById("btnStart").addEventListener("click", openGetStarted);
+/* About: the version, and links that open a prefilled GitHub issue. The
+   links carry only the version and where the page runs, never any data. */
+document.getElementById("btnAbout").addEventListener("click", function(){
+  var ver = APP_VERSION + (DEMO ? " (demo)" : store && store.kind === "local" ? " (claude.ai, this browser only)" : " (claude.ai)");
+  var q = "&version=" + encodeURIComponent(ver);
+  document.getElementById("aboutVer").textContent = "version " + APP_VERSION;
+  document.getElementById("aboutBug").href = REPO_URL + "/issues/new?template=bug.yml" + q;
+  document.getElementById("aboutIdea").href = REPO_URL + "/issues/new?template=feature.yml" + q;
+  document.getElementById("aboutNew").href = REPO_URL + "/releases";
+  document.getElementById("aboutScrim").hidden = false;
+});
+document.getElementById("aboutClose").addEventListener("click", function(){ document.getElementById("aboutScrim").hidden = true; });
 document.getElementById("gsTabs").addEventListener("click", function(e){
   var t = e.target.closest("[data-gstab]");
   if(!t || !gs || !dropEdits()) return;
@@ -2930,6 +2966,7 @@ gsBody.addEventListener("drop", function(e){
 });
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
+    if(!document.getElementById("aboutScrim").hidden){ document.getElementById("aboutScrim").hidden = true; return; }
     if(gs){ if(dropEdits()) closeGetStarted(true); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
