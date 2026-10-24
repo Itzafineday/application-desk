@@ -44,25 +44,24 @@ rarely use don't clutter the page.
    the database collection (`jobs`), the browser storage keys and the backup
    file names keep their old names, so nothing existing has to move.
 
-### v4 status (first slice built 2026-10-23, not deployed)
+### v4 status
+
+First slice deployed 2026-10-24 (see Deploys); the resume polisher is built
+and not deployed yet.
 
 | # | Built | Still to do |
 |---|---|---|
-| 1 | Get started: paste a resume or pick a PDF or Word file, check the fields read from it, save the profile (`profile/me`). Skippable at every step; opens by itself once when there is no profile. | Offer the polisher and the practice interview at the end, once they exist. |
-| 2 | Nothing yet. The profile keeps the imported resume text (`resume`) to start from. | All of it. |
+| 1 | Get started: paste a resume or pick a PDF or Word file, check the fields read from it, save the profile (`profile/me`). Skippable at every step; opens by itself once when there is no profile. Its last step offers Resume versions. | Offer the practice interview at the end, once it exists. |
+| 2 | Resume versions (Profile, or Tailor resume on a job's Letter tab): versions in the `resumes` collection, never changed once saved; Claude polishes one in general or for a job and saves a new version with notes; edits save as a new version; any version saves as a PDF. Backups carry the versions (`--resumes`). | Suggestions to accept one at a time, instead of a whole new version. A side-by-side view of what changed. |
 | 3 | Nothing yet. | All of it. |
 | 4 | Help me apply tab: paste a company form's questions, saved on the job as `form`; Claude drafts each `answer`, shown with a Copy button. | Filling the form through the browser extension for the user to review. |
 | 5 | Renamed. | Nothing. |
 
-Before the first v4 deploy:
-- Check that the two readers load in the published page: pdf.js 3.11.174 and
-  mammoth 1.11.0 from cdnjs. They load only when a file is picked, and the
-  page says so if they don't; pasting text always works.
-- `scripts/pack-backup.js` now packs the profile when given `--profile`, but
-  the daily backup task on the owner's machine still lists only `jobs`. Have
-  it list `profile` too and pass `--profile <listing>/profile` (see Backups
-  in AGENTS.md).
-- Get started will open once for the owner, since there is no profile yet.
+Before deploying the polisher:
+- No migration: `resumes` is a new collection, and the page reads an empty
+  one as "no versions yet".
+- Have the daily backup task list `resumes` too and pass
+  `--resumes <listing>/resumes` (see Backups in AGENTS.md).
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
