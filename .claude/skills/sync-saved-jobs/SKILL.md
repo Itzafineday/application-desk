@@ -1,12 +1,12 @@
 ---
 name: sync-saved-jobs
-description: Pull the jobs marked Saved on Indeed and LinkedIn into the Application Desk as new queued jobs, skipping any the Desk already has. Use when the owner asks to sync, import or pick up their saved jobs. Needs Claude in Chrome signed in to both sites, and the Desk's artifact database.
+description: Pull the jobs marked Saved on Indeed and LinkedIn into Seed Change as new queued jobs, skipping any it already has. Use when the owner asks to sync, import or pick up their saved jobs. Needs Claude in Chrome signed in to both sites, and Seed Change's artifact database.
 ---
 
 # Sync saved jobs
 
-Copies the jobs the owner marked **Saved** on Indeed and LinkedIn onto the Desk
-as new `queued` jobs. It only reads the job sites and only adds to the Desk.
+Copies the jobs the owner marked **Saved** on Indeed and LinkedIn into Seed
+Change as new `queued` jobs. It only reads the job sites and only adds jobs.
 
 ## Rules
 
@@ -14,7 +14,7 @@ as new `queued` jobs. It only reads the job sites and only adds to the Desk.
   read text. Never click Apply, Easy Apply, Save or Unsave, Message, Add note,
   Archive or a status menu, and never change a setting. If a site asks to sign
   in or shows a check, stop and ask the owner to deal with it in their browser.
-- **Append-only on the Desk.** Create new job documents only. Never edit,
+- **Append-only in Seed Change.** Create new job documents only. Never edit,
   close or delete a job that is already there, even one that looks wrong.
 - **Ask before writing.** Show the owner what will be added and skipped, and
   write only after they say go.
@@ -25,7 +25,7 @@ as new `queued` jobs. It only reads the job sites and only adds to the Desk.
 
 ## Before you start
 
-- The Desk's artifact URL and the backup folder are in `CLAUDE.local.md`. The
+- Seed Change's artifact URL and the backup folder are in `CLAUDE.local.md`. The
   collection is `jobs`. Read `docs/schema.md` if you haven't.
 - Browse with Claude in Chrome (`mcp__claude-in-chrome__*`): load
   `tabs_context_mcp`, `tabs_create_mcp`, `navigate`, `get_page_text`,
@@ -34,7 +34,7 @@ as new `queued` jobs. It only reads the job sites and only adds to the Desk.
 - Make a new, empty scratch folder for the run (the session scratchpad, never
   the repo). It is called RUN below.
 
-## 1. List and back up the Desk
+## 1. List and back up the jobs
 
 1. ArtifactData `list`, collection `jobs`, `query: {"limit": 1000}`,
    `out_dir: RUN/listing`. If a `next_cursor` comes back, list again with it.
@@ -109,7 +109,7 @@ URL as `https://ca.indeed.com/viewjob?jk=<key>` or
 node scripts/saved-jobs.js check RUN/listing/jobs RUN/saved.json
 ```
 
-`NEW` lines are the jobs to open. `SKIP` lines name the Desk job each one
+`NEW` lines are the jobs to open. `SKIP` lines name the existing job each one
 repeats and why. The rule is the page's own (`findDuplicate`): the same link,
 the same LinkedIn job id or Indeed job key, or the same company and title. It
 also applies within the list, so a second saved job with the same company and
@@ -136,7 +136,7 @@ URL, `wait` 2 seconds, then `get_page_text`.
   page text from the top down to the end of the description (the "… more" line
   on LinkedIn, "Report job" on Indeed). The parser ignores anything after
   that, so stopping there only saves typing. Copy the posting itself exactly:
-  it is the Desk's record if the posting comes down.
+  it is Seed Change's record if the posting comes down.
 - If the page says the job is closed or no longer accepting applications, or
   doesn't load, skip it and note it for the report.
 
@@ -181,5 +181,5 @@ List `jobs` again into a new folder and confirm: the count is the old count
 plus the jobs added, every new id is there, and no existing job's version
 changed (the list result shows each version; a change means the owner edited
 it in the page meanwhile, which is fine, but say so). Then report what was added (company, title, source), what was
-skipped and why, and anything left for the owner. Delete RUN once the Desk
-checks out; the pre-sync backup stays.
+skipped and why, and anything left for the owner. Delete RUN once Seed
+Change checks out; the pre-sync backup stays.

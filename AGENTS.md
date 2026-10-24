@@ -101,13 +101,13 @@ same synced folder create conflict copies.
 The page can't sign in to LinkedIn or Indeed, so picking up the jobs the
 owner marked Saved there is a Claude workflow: the `sync-saved-jobs` skill
 (`.claude/skills/sync-saved-jobs/SKILL.md`). Claude reads the saved lists
-with Claude in Chrome, opens each job the Desk doesn't have yet, and saves its
+with Claude in Chrome, opens each job Seed Change doesn't have yet, and saves its
 page text to a scratch folder. `node scripts/saved-jobs.js check` and `build`
 then apply the page's own parser and duplicate rule (`parsePaste`,
 `findDuplicate`) and write new job documents with status `queued`. After a
 backup into the backup folder's `pre-sync` subfolder and the owner's go,
 Claude creates them with one ArtifactData batch. It never changes anything on
-the job sites and never edits or deletes a job already on the Desk.
+the job sites and never edits or deletes a job already in Seed Change.
 
 ## Conventions
 - Small commits, one concern each, imperative mood ("Add Indeed parser").

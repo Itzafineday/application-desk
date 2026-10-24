@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Turns jobs marked Saved on LinkedIn or Indeed into new Desk jobs, leaving
-// out any the Desk already has. Claude runs it during the sync-saved-jobs
-// skill (.claude/skills/sync-saved-jobs/SKILL.md). It never touches the Desk.
+// Turns jobs marked Saved on LinkedIn or Indeed into new Seed Change
+// jobs, leaving out any it already has. Claude runs it during the sync-saved-jobs
+// skill (.claude/skills/sync-saved-jobs/SKILL.md). It never touches the database.
 //
 //   node scripts/saved-jobs.js check <jobs-dir> <saved.json>
 //   node scripts/saved-jobs.js build <jobs-dir> <pages-dir> <out-dir>
@@ -10,12 +10,12 @@
 // an ArtifactData "list" with an out_dir saves it.
 //
 // check reads <saved.json>, a list of { url, company, title } read off the
-// sites' saved-jobs pages, and prints which are new and which the Desk
-// already has, and why. It writes nothing.
+// sites' saved-jobs pages, and prints which are new and which Seed
+// Change already has, and why. It writes nothing.
 //
 // build reads one text file per job page from <pages-dir>: the job's URL on
 // the first line, then the page text. Each is parsed with the page's own
-// parser and checked with its duplicate rule (against the Desk and against
+// parser and checked with its duplicate rule (against the existing jobs and against
 // jobs earlier in the run). Dates like "1 week ago" count back from when each
 // page file was last written. Each new job is written to <out-dir>/<id>.json in
 // the shape of docs/schema.md, ready to create with an ArtifactData batch.
@@ -54,7 +54,7 @@ function readJobs(dir) {
   return jobs;
 }
 
-/* The link the Desk stores: a LinkedIn job's own page, or Indeed's viewjob page. */
+/* The link Seed Change stores: a LinkedIn job's own page, or Indeed's viewjob page. */
 function canonical(url) {
   url = String(url || "").trim();
   const ref = jobRef(url);
@@ -151,7 +151,7 @@ function main() {
       ? `SKIP  ${p.url}  ${p.company} / ${p.title}: ${reason(dup)}`
       : `NEW   ${p.url}  ${p.company} / ${p.title}`));
     const fresh = rows.filter((r) => !r.dup).length;
-    console.log(`${fresh} new, ${rows.length - fresh} skipped, of ${rows.length} saved (Desk has ${desk.length}).`);
+    console.log(`${fresh} new, ${rows.length - fresh} skipped, of ${rows.length} saved (Seed Change has ${desk.length}).`);
   } else if (cmd === "build" && args.length === 3) {
     const [jobsDir, pagesDir, outDir] = args;
     const desk = readJobs(jobsDir);

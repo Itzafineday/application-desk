@@ -17,7 +17,7 @@ const desk = [
     title: "Sr Manager - IT Operations", url: "" },
 ];
 
-test("canonical: the link the Desk stores for each site", () => {
+test("canonical: the link Seed Change stores for each site", () => {
   assert.equal(canonical("https://www.linkedin.com/jobs/view/4000000010/?refId=abc&trk=x"),
     "https://www.linkedin.com/jobs/view/4000000010/");
   assert.equal(canonical("https://www.linkedin.com/jobs/view/senior-sysadmin-at-larchmont-4000000010"),
@@ -27,7 +27,7 @@ test("canonical: the link the Desk stores for each site", () => {
   assert.equal(canonical("https://jobs.example.com/1"), "https://jobs.example.com/1");
 });
 
-test("check: new jobs, jobs already on the Desk, and repeats within the list", () => {
+test("check: new jobs, jobs already saved, and repeats within the list", () => {
   const rows = check(desk, [
     { url: "https://www.linkedin.com/jobs/view/4000000010/", company: "Larchmont Analytics", title: "Senior Systems Administrator" },
     { url: "https://www.linkedin.com/jobs/view/4000000001/?refId=x", company: "Northgate Robotics", title: "Senior Cloud Engineer" },
