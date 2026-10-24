@@ -17,6 +17,6 @@ function loadSection(startMarker, endMarker, names) {
 
 module.exports = function loadParser() {
   return loadSection("/* ============================ paste parser", "function showPreview(){",
-    ["parsePaste", "linkedinId", "indeedKey", "jobRef"]);
+    ["parsePaste", "linkedinId", "indeedKey", "jobRef", "findDuplicate"]);
 };
 module.exports.loadSection = loadSection;

@@ -1302,6 +1302,21 @@ function jobRef(url){
   if(ik) return {site:"Indeed", id:ik};
   return null;
 }
+/* The job in `jobs` that a parsed paste repeats: the same link, the same
+   LinkedIn or Indeed job, or the same company and title (the same posting
+   found on another site). Returns {job, why}, or null when it is new. */
+function findDuplicate(jobs, p){
+  var ref = jobRef(p.url);
+  var squash = function(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,""); };
+  for(var i=0;i<jobs.length;i++){
+    var x = jobs[i], xr = jobRef(x.url);
+    if(p.url && x.url === p.url) return {job:x, why:"same link"};
+    if(ref && xr && xr.site === ref.site && xr.id === ref.id) return {job:x, why:"same " + ref.site + " job"};
+    if(p.company && p.title && squash(x.company) === squash(p.company) && squash(x.title) === squash(p.title))
+      return {job:x, why:"same company and title"};
+  }
+  return null;
+}
 
 /* ---- Indeed ----
    A search-results paste holds a list of other jobs before the selected one,
@@ -1382,8 +1397,27 @@ function parseIndeed(raw, out){
   return out;
 }
 
-function parsePaste(raw){
-  var lines = raw.replace(/\r/g,"").split("\n")
+/* ---- LinkedIn ----
+   Below the posting, a job page carries the company profile, "More jobs"
+   (with other jobs' pay and dates) and the footer, and above "About the job"
+   some of LinkedIn's own prompts. Only the posting is read and kept. */
+var LINKEDIN_END = /^(…|\.\.\.)\s*more$|^(set alert for similar jobs|about the company|more jobs|see more jobs like this)$/i;
+var LINKEDIN_META = /·.*(\bago\b|\bapplicants?\b|clicked apply)/i;   // "Burnaby, BC · 2 days ago · 68 applicants"
+var LINKEDIN_CHROME = /^(company logo.*|save|saved|use ai to assess how you fit|show match details|tailor my resume|help me stand out|people you can reach out to|show all|school alumni .*|.* school alumni work here|you’d be a top applicant.*|your profile and resume match.*)$/i;
+function linkedinPosting(raw){
+  var all = raw.replace(/\r/g,"").split("\n");
+  var a = -1;
+  for(var i=0;i<all.length;i++){ if(/^\s*about the job\s*$/i.test(all[i])){ a = i; break; } }
+  if(a < 0) return "";                            // not a job page we know
+  var end = all.length;
+  for(var e=a+1;e<all.length;e++){ if(LINKEDIN_END.test(all[e].trim())){ end = e; break; } }
+  return all.slice(0, end)
+    .filter(function(l){ return !LINKEDIN_CHROME.test(l.trim()); })
+    .join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function pasteLines(raw){
+  return raw.replace(/\r/g,"").split("\n")
     .map(function(l){ return l.replace(/ /g," ").trim(); })
     .filter(function(l){
       if(!l) return false;
@@ -1398,7 +1432,10 @@ function parsePaste(raw){
       if(/^\$?\s?[\d][\d,.]*\s?[Kk]?\s*(?:-|–|—|to)\s*\$?\s?[\d][\d,.]*\s?[Kk]?\s*(?:CAD|USD)?(?:\s*\/\s*yr)?$/i.test(l)) return false;
       return true;
     });
+}
 
+function parsePaste(raw){
+  var lines = pasteLines(raw);
   var out = {company:"", title:"", location:"", band:"", posted:"", url:"", source:""};
 
   // URL
@@ -1412,16 +1449,21 @@ function parsePaste(raw){
     var indeed = parseIndeed(raw, out);
     if(indeed) return indeed;
   }
+  var posting = out.source === "Indeed" ? "" : linkedinPosting(raw);
+  if(posting){ out.posting = posting; lines = pasteLines(posting); }
 
-  // Band — LinkedIn's own "91K CAD/yr - 113K CAD/yr" chip comes first
+  // Band — LinkedIn's own chip comes first: "91K CAD/yr - 113K CAD/yr",
+  // "$70K/yr - $104.2K/yr" or "32.93 CAD/hr - 38.56 CAD/hr"
   var joined = lines.join("\n");
-  var cadm = joined.match(/([\d.]+)\s*K\s*CAD\s*\/\s*yr\s*(?:-|–|—|to)\s*([\d.]+)\s*K\s*CAD\s*\/\s*yr/i);
-  if(cadm){
+  var pay = (posting || raw).replace(/ /g," ");   // unfiltered: keeps a bare "$75,000 to $90,000" line
+  var chip = pay.match(/\$?([\d.,]+)\s*(K)?\s*(?:CAD)?\s*\/\s*(yr|hr)\s*(?:-|–|—|to)\s*\$?([\d.,]+)\s*K?\s*(?:CAD)?\s*\/\s*(?:yr|hr)/i);
+  if(chip){
     var kfmt = function(v){ return "$" + Math.round(parseFloat(v)*1000).toLocaleString("en-US"); };
-    out.band = kfmt(cadm[1]) + " - " + kfmt(cadm[2]);
+    if(chip[3].toLowerCase() === "hr") out.band = indeedPay("$" + chip[1] + " - $" + chip[4] + " an hour");
+    else out.band = chip[2] ? kfmt(chip[1]) + " - " + kfmt(chip[4]) : "$" + chip[1] + " - $" + chip[4];
   }
   if(!out.band){
-    var biw = joined.match(/\$?\s?([\d,]+(?:\.\d+)?)\s*Biweekly/i);
+    var biw = pay.match(/\$?\s?([\d,]+(?:\.\d+)?)\s*Biweekly/i);
     if(biw){
       var per = parseFloat(biw[1].replace(/,/g,""));
       out.band = "$" + per.toLocaleString("en-US") + " biweekly (~$"
@@ -1429,12 +1471,16 @@ function parsePaste(raw){
     }
   }
   if(!out.band){
-    var bm = joined.match(/(?:CA\$|C\$|\$)\s?([\d][\d,\.]*)\s?([Kk])?\s*(?:-|–|—|to)\s*(?:CA\$|C\$|\$)?\s?([\d][\d,\.]*)\s?([Kk])?/);
+    var bm = pay.match(/(?:CA\$|C\$|\$)\s?([\d][\d,\.]*)\s?([Kk])?\s*(?:CAD|USD)?\s*(?:-|–|—|to)\s*(?:CA\$|C\$|\$)?\s?([\d][\d,\.]*)\s?([Kk])?/);
     if(bm){
-      var lo = bm[1] + (bm[2]||""), hi = bm[3] + (bm[4]||"");
-      out.band = "$" + lo + " - $" + hi;
+      var num = function(v){ return v.replace(/[.,]+$/,"").replace(/\.00$/,""); };
+      var lo = num(bm[1]) + (bm[2]||""), hi = num(bm[3]) + (bm[4]||"");
+      // "$25 - $35/hr", "$42.35 to $46.55 per hour": an hourly band with a yearly estimate
+      var unit = pay.slice(bm.index + bm[0].length).match(/^\s*(?:CAD\s*)?(?:an?|per|\/)\s*(hour|hr|day|week|month)\b/i);
+      out.band = unit ? indeedPay("$" + lo + " - $" + hi + " per " + unit[1].toLowerCase().replace(/^hr$/, "hour"))
+                      : "$" + lo + " - $" + hi;
     } else {
-      var bm2 = joined.match(/([\d,]{5,})\s*(?:-|–|—|to)\s*([\d,]{5,})/);
+      var bm2 = pay.match(/([\d,]{5,})(?:\.\d+)?\s*(?:-|–|—|to)\s*([\d,]{5,})/);
       if(bm2) out.band = "$" + bm2[1] + " - $" + bm2[2];
     }
   }
@@ -1460,7 +1506,21 @@ function parsePaste(raw){
     if(pd) out.posted = pd[1];
   }
 
-  // Title / company from the first few content lines
+  // LinkedIn's header: the company, the title, then the location and date
+  // line. Read from there first: a title can itself name a city.
+  var meta = -1;
+  for(var q=0; q<lines.length && (out.source === "LinkedIn" || posting); q++){
+    if(LINKEDIN_META.test(lines[q])){ meta = q; break; }
+  }
+  var above = lines.slice(0, Math.max(meta, 0)).filter(function(l){ return !/^https?:/i.test(l); });
+  if(above.length >= 2){
+    out.company = above[above.length-2];
+    out.title = above[above.length-1];
+    var where = lines[meta].split("·")[0].trim(), wm = where.match(PLACE);
+    out.location = wm ? wm[1].replace(/\s+/g," ") : where;
+  }
+
+  // Otherwise title / company from the first few content lines
   var head = lines.filter(function(l){
     if(/^https?:/i.test(l)) return false;
     if(/^\$/.test(l)) return false;
@@ -1471,7 +1531,7 @@ function parsePaste(raw){
     return true;
   }).slice(0,4);
 
-  if(head.length){
+  if(!out.title && head.length){
     var a = head[0], b = head[1] || "";
     var aRole = ROLE_WORDS.test(a), bRole = ROLE_WORDS.test(b);
     var bCo = CO_SUFFIX.test(b.replace(/[.,]$/,""));
@@ -1994,15 +2054,7 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   if(!raw.trim()) return;
   var p = parsePaste(raw);
   var ref = jobRef(p.url);
-  // The same job: same link, same LinkedIn or Indeed job, or the same company
-  // and title (the same posting found on another site).
-  var same = function(a, b){ return String(a||"").toLowerCase().replace(/[^a-z0-9]/g,"") === String(b||"").toLowerCase().replace(/[^a-z0-9]/g,""); };
-  var dup = state.jobs.filter(function(x){
-    if(p.url && x.url === p.url) return true;
-    var xr = jobRef(x.url);
-    if(ref && xr && xr.site === ref.site && xr.id === ref.id) return true;
-    return !!(p.company && p.title && same(x.company, p.company) && same(x.title, p.title));
-  })[0];
+  var found = findDuplicate(state.jobs, p), dup = found && found.job;
   if(dup){
     document.getElementById("addScrim").hidden = true;
     ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";

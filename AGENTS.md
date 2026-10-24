@@ -59,12 +59,15 @@ and only with the owner's OK. Commit first, then:
 - `public/sample-data.json`: fictional jobs and profile for the demo and for
   tests.
 - `tests/`: tests for the paste parser, the resume reader, the form question
-  splitter and the backup packer, on fictional data (`node --test`, no install
-  needed). Run them before committing any change to these, and add a fixture
-  for each new layout. Fixtures must be invented, never a real posting,
-  resume or form.
+  splitter, the backup packer and the saved-jobs script, on fictional data
+  (`node --test`, no install needed). Run them before committing any change to
+  these, and add a fixture for each new layout. Fixtures must be invented,
+  never a real posting, resume or form.
 - `scripts/pack-backup.js`: turns a listing of the `jobs` and `profile`
   collections into a dated export file and keeps the newest 30 (see Backups).
+- `scripts/saved-jobs.js`: checks saved jobs against a listing of `jobs` and
+  turns saved job pages into new job documents (see Saved jobs).
+- `.claude/skills/`: Claude workflows for this repo.
 
 ## Working with the live data
 Only Claude, signed in as the owner, can reach the shared database (claude.ai
@@ -93,6 +96,18 @@ any file is unreadable, warns when the job count drops by more than a fifth
 or the profile disappears since the previous backup, and only rotates files
 with exactly that name. Run it from one machine: two machines writing the
 same synced folder create conflict copies.
+
+## Saved jobs
+The page can't sign in to LinkedIn or Indeed, so picking up the jobs the
+owner marked Saved there is a Claude workflow: the `sync-saved-jobs` skill
+(`.claude/skills/sync-saved-jobs/SKILL.md`). Claude reads the saved lists
+with Claude in Chrome, opens each job Seed Change doesn't have yet, and saves its
+page text to a scratch folder. `node scripts/saved-jobs.js check` and `build`
+then apply the page's own parser and duplicate rule (`parsePaste`,
+`findDuplicate`) and write new job documents with status `queued`. After a
+backup into the backup folder's `pre-sync` subfolder and the owner's go,
+Claude creates them with one ArtifactData batch. It never changes anything on
+the job sites and never edits or deletes a job already in Seed Change.
 
 ## Conventions
 - Small commits, one concern each, imperative mood ("Add Indeed parser").
