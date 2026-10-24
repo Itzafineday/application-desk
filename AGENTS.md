@@ -90,6 +90,11 @@ artifact tools). Other agents work on code and sample data only.
   delete theirs. References hold other people's contact details: use them
   only in Seed Change and on application forms the owner asks you to help
   with, and never put them anywhere else.
+- Guides (LinkedIn, Indeed, practice interview): write only a guide's
+  `drafts` and `summary` (see `docs/schema.md`), never `status` or `answers`.
+  You may read the owner's LinkedIn or Indeed profile with Claude in Chrome
+  to draft from it, but only read: never edit, save, message or apply there.
+  The owner pastes every draft in themselves.
 - Pin every write to the document version you read, so a change made in the
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection

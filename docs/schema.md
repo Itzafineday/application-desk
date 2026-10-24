@@ -200,6 +200,35 @@ edits and removes them in the page (Profile → Documents).
   resume layout.
 - The browser cache keeps documents without their text.
 
+## Guides
+
+Step-by-step guides through chores outside Seed Change (Profile → Guides).
+Collection `guides`, one document per guide; the document id is the guide's
+id. The steps themselves are not stored: they are `GUIDES` in the page, so
+their wording can change while their ids stay put.
+
+| Guide id | Steps (ids, in order) |
+|---|---|
+| `linkedin` | `photo`, `headline` (220 characters), `about` (2,600), `experience` (2,000 a role), `skills`, `open`, `featured`, `url` |
+| `indeed` | `resume`, `summary`, `qualifications`, `preferences`, `ready` |
+| `interview` | `about`, `next`, `proud`, `problem`, `conflict`, `learn`, `strengths`, `workplace`, `support`, `history`, `questions` |
+
+| Field | Type | Written by | Notes |
+|---|---|---|---|
+| `id` | string | page | The guide id. |
+| `created`, `updated` | string | page | ISO 8601 timestamps. |
+| `status` | object | page | Step id → `"done"`, `"skipped"` or `"todo"`. A missing step is to do. |
+| `answers` | object | page | Interview only: step id → the owner's answer. |
+| `drafts` | object | Claude | Step id → plain text: for a profile guide, what to paste into that section; for the interview, feedback on the answer and a stronger version in the owner's voice. `photo` and `ready` have nothing to paste. |
+| `summary` | string | Claude | Interview only: what the answers showed that the profile is missing. The page can add it to the profile's `more`. |
+
+Each field has one writer, so the page and Claude never overwrite each
+other. Claude writes `drafts` (the whole map) and `summary` pinned to the
+version it read, creating the document if there is none, and never touches
+`status` or `answers`. To draft a profile guide, Claude may read the
+owner's LinkedIn or Indeed profile with Claude in Chrome, read-only: it
+never clicks Edit, Save, Apply or anything else that changes the site.
+
 ## Export file
 
 "Export backup" saves, and "Import" reads, this shape:

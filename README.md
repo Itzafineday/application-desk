@@ -31,6 +31,13 @@ page updates live.
   resume** on a job's letter, ask Claude to polish your resume in general or
   for one job. Each result is a new version with Claude's notes on what
   changed, so nothing is lost, and any version saves as a PDF.
+- **Documents and your voice.** Keep past cover letters, references and
+  writing samples in Seed Change (Profile → Documents). Claude learns how you
+  write from them, so letters sound like you, and builds a references sheet
+  for any job.
+- **Guides.** Step by step through your LinkedIn and Indeed profiles, with a
+  draft from Claude for each section to paste in, and a practice interview
+  with feedback on each answer (Profile → Guides). Your progress is kept.
 - **Help me apply.** For company sites with their own long application form,
   paste its questions into the job's Help me apply tab. Ask Claude in chat and
   it drafts an answer to each one from your profile, for you to check and copy

@@ -325,6 +325,20 @@ textarea.note{min-height:110px;font-size:13px}
   padding:1px 6px;border-radius:3px;background:var(--surface-3);color:var(--muted);white-space:nowrap;
 }
 .gs .two{display:grid;grid-template-columns:180px 1fr;gap:0 12px}
+.gs .gcard{border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;
+  display:flex;gap:12px;align-items:center}
+.gs .gcard .t{flex:1}
+.gs .gcard .t b{display:block;font-size:13.5px}
+.gs .gcard .t span{font-size:12px;color:var(--muted)}
+.gs .pills{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 12px}
+.gs .pill2{
+  width:26px;height:24px;border-radius:4px;border:1px solid var(--line);background:transparent;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);padding:0;
+}
+.gs .pill2.done{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.gs .pill2.skipped{border-style:dashed;color:var(--faint)}
+.gs .pill2[aria-current="step"]{outline:2px solid var(--accent);outline-offset:1px;color:var(--text)}
+.gs h3.q{font-size:15px;margin:0 0 6px;font-weight:600;line-height:1.4}
 @media (max-width:600px){ .gs .two{grid-template-columns:1fr} }
 
 /* ---------- toast ---------- */
@@ -2006,14 +2020,15 @@ function resumeChoices(){
   return list;
 }
 /* A collection changed in the store. */
+function typingAnswer(){ var a = document.activeElement; return !!a && a.id === "gsAns"; }
 function itemsChanged(coll, before){
   if(coll === "resumes") resumesChanged(before);
-  else if(gs && !editing() && ((coll === "documents" && gs.step === "documents")
+  else if(gs && !editing() && !typingAnswer() && ((coll === "documents" && gs.step === "documents")
     || (coll === "guides" && (gs.step === "guides" || gs.step === "guide")))) renderGetStarted();
 }
 /* The profile changed in the store: refresh a tab that shows part of it. */
 function profileChanged(){
-  if(gs && !editing() && (gs.step === "documents" || gs.step === "guide")) renderGetStarted();
+  if(gs && !editing() && !typingAnswer() && (gs.step === "documents" || gs.step === "guide")) renderGetStarted();
 }
 /* New versions arrived: show the newest unless the text there is being edited. */
 function resumesChanged(before){
@@ -2028,9 +2043,9 @@ function resumesChanged(before){
 /* Unsaved edits in the versions step survive the first attempt to leave
    them (switch version, go back, close): a second one drops them. Dialogs
    like confirm() may be blocked in the artifact's frame, so none are used. */
-function editing(){ return !!gs && (gs.vtext !== null || gs.ddirty); }
+function editing(){ return !!gs && (gs.vtext !== null || gs.ddirty || gs.pdirty); }
 function dropEdits(){
-  if(!gs || !editing() || gs.warned){ if(gs){ gs.warned = false; gs.vtext = null; gs.ddirty = false; } return true; }
+  if(!gs || !editing() || gs.warned){ if(gs){ gs.warned = false; gs.vtext = null; gs.ddirty = false; gs.pdirty = false; } return true; }
   gs.warned = true;
   toast("Unsaved edits. Save them as a new version, or do that again to drop them.", true);
   return false;
@@ -2048,6 +2063,7 @@ function copyResumeRequest(){
     "Copied. Paste it into your chat with Claude.");
 }
 function closeGetStarted(skipped){
+  if(gs && gs.step === "guide" && gs.keepAnswer) gs.keepAnswer();
   if(skipped && !state.profile){
     if(!DEMO){ try{ localStorage.setItem(SKIP_KEY, "skipped"); }catch(e){} }
     toast("Skipped. Get started is at the top whenever you want it.");
@@ -2143,7 +2159,12 @@ function renderGetStarted(){
     Object.keys(map).forEach(function(k){
       var el = document.getElementById(map[k]);
       el.value = gs.f[k];
-      el.addEventListener("input", function(){ gs.f[k] = el.value; });
+      el.addEventListener("input", function(){
+        gs.f[k] = el.value;
+        // Unsaved only on the saved profile's own tab; the first-run steps save at the end.
+        gs.pdirty = had && Object.keys(map).some(function(f){ return gs.f[f] !== state.profile[f]; });
+        gs.warned = false;
+      });
     });
     var rp = document.getElementById("gsReplace");
     if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
@@ -2172,6 +2193,8 @@ function renderGetStarted(){
 
   else if(gs.step === "versions") renderVersions(body, foot, title, stepEl);
   else if(gs.step === "documents") renderDocuments(body, foot, title, stepEl);
+  else if(gs.step === "guides") renderGuides(body, foot, title, stepEl);
+  else if(gs.step === "guide") renderGuide(body, foot, title, stepEl);
 
   var skip = document.getElementById("gsSkip");
   if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
@@ -2261,6 +2284,130 @@ function renderVersions(body, foot, title, stepEl){
     if(!dropEdits()) return;
     closeGetStarted(false);
   });
+}
+
+/* The guides, with how far each has got. */
+function renderGuides(body, foot, title, stepEl){
+  title.textContent = "Guides";
+  stepEl.textContent = "";
+  body.innerHTML = '<p class="lead">Fiddly jobs outside Seed Change, one step at a time. Claude drafts what to'
+    + ' write; you do the clicking. Your progress is kept, so stop whenever you like.</p>'
+    + Object.keys(GUIDES).map(function(id){
+        var def = GUIDES[id], pr = guideProgress(def, itemById("guides", id));
+        var label = pr.finished ? "Review" : (pr.done || pr.skipped) ? "Continue" : "Start";
+        return '<div class="gcard"><div class="t"><b>' + esc(def.title) + '</b><span>' + esc(def.intro) + '</span><br>'
+          + '<span class="hint">' + pr.done + ' of ' + pr.total + ' done' + (pr.skipped ? ' · ' + pr.skipped + ' skipped' : '')
+          + '</span></div><button class="btn sm' + (pr.finished ? '' : ' primary') + '" data-guide="' + id + '">' + label + '</button></div>';
+      }).join("");
+  foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+  Array.prototype.forEach.call(body.querySelectorAll("[data-guide]"), function(b){
+    b.addEventListener("click", function(){
+      var def = GUIDES[b.dataset.guide];
+      gs.guide = b.dataset.guide;
+      gs.gi = guideProgress(def, itemById("guides", gs.guide)).next;
+      gs.step = "guide"; renderGetStarted();
+    });
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+}
+/* Write some of a guide's maps (status, answers), creating it if need be.
+   The page writes only status and answers; Claude only drafts and summary. */
+function saveGuide(id, fields){
+  var now = new Date().toISOString();
+  if(!itemById("guides", id)) fields.created = now;
+  fields.updated = now;
+  changeItem("guides", id, fields);
+}
+function renderGuide(body, foot, title, stepEl){
+  var def = GUIDES[gs.guide], g = itemById("guides", gs.guide) || {status:{}, answers:{}, drafts:{}, summary:""};
+  var n = def.steps.length, i = Math.max(0, Math.min(n - 1, gs.gi || 0)), st = def.steps[i];
+  var draft = (g.drafts[st.id] || "").trim(), interview = def.kind === "interview";
+  title.textContent = def.title;
+  stepEl.textContent = "Step " + (i + 1) + " of " + n;
+  var ask = interview
+    ? "Please review my practice interview answers in Seed Change (guide \"interview\" in the guides collection)."
+      + " For each answered question, write short feedback into drafts by step id: what works, what to tighten,"
+      + " and a stronger version in my own voice. Then write into summary anything the answers taught you about me"
+      + " that my profile is missing, as plain text I can add to it. Keep it truthful: don't invent experience."
+      + " Don't change answers or status."
+    : "Please draft my " + def.siteName + " profile sections in Seed Change (guide \"" + gs.guide + "\" in the guides"
+      + " collection; its steps and ids are in docs/schema.md). If you can use Claude in Chrome, first read my current"
+      + " profile at " + def.site + ", read-only: never click Edit, Save or anything that changes the site. Draft each"
+      + " step from my profile, documents and latest resume version, following my voice note and the site's limits,"
+      + " and save them into the guide's drafts map by step id. Keep it truthful. Don't change status or answers.";
+
+  body.innerHTML = '<div class="pills">' + def.steps.map(function(x, k){
+      var v = g.status[x.id];
+      return '<button class="pill2' + (v === "done" ? " done" : v === "skipped" ? " skipped" : "") + '" data-gi="' + k + '"'
+        + (k === i ? ' aria-current="step"' : '') + ' title="' + esc(x.title) + '">' + (v === "done" ? "✓" : k + 1) + '</button>';
+    }).join("") + '</div>'
+    + '<h3 class="q">' + esc(st.title) + '</h3><p class="lead">' + esc(st.where) + '</p>'
+    + (interview
+      ? '<label for="gsAns">Your answer</label><textarea class="field prose" id="gsAns"></textarea>'
+        + (draft ? '<div class="notes"><b>Claude\'s feedback</b>' + esc(g.drafts[st.id]) + '</div>' : '')
+      : st.paste === false ? ''
+      : draft ? '<div class="notes"><b>Claude\'s draft</b>' + esc(g.drafts[st.id]) + '</div>'
+        + '<div class="rowbtns"><button class="btn sm" id="gsGCopy">Copy draft</button>'
+        + (st.limit ? '<span class="hint">' + g.drafts[st.id].length + ' of ' + st.limit + ' characters</span>' : '') + '</div>'
+      : '<p class="qempty">No draft yet. Copy the request below into your chat with Claude.</p>')
+    + (def.site ? '<div class="rowbtns"><a class="btn sm" href="' + esc(def.site) + '" target="_blank" rel="noopener">Open '
+      + esc(def.siteName) + ' ↗</a><span class="hint">Sites change their layouts; if a button isn\'t where this says, look for its name.</span></div>' : '')
+    + (interview && g.summary.trim() ? '<div class="notes"><b>Claude\'s suggestions for your profile</b>' + esc(g.summary) + '</div>'
+      + '<div class="rowbtns"><button class="btn sm" id="gsAddMore">Add to “More about you”</button></div>' : '')
+    + '<div class="ask"><div class="rowbtns" style="margin-top:0"><button class="btn sm" id="gsGAsk">Copy request for Claude</button>'
+    + '<span class="hint">' + (interview ? "Answer a few, then paste it into your chat." : "Paste it into your chat; drafts appear here.") + '</span></div></div>';
+  foot.innerHTML = '<button class="btn ghost left" id="gsAll">All guides</button>'
+    + '<button class="btn" id="gsGBack"' + (i ? '' : ' disabled') + '>Back</button>'
+    + '<button class="btn ghost" id="gsGSkip">Skip</button>'
+    + '<button class="btn primary" id="gsGDone">' + (interview ? "Save and next" : "Done") + (i === n - 1 ? "" : " →") + '</button>';
+
+  // An answer saves as it is typed (after a pause), and at once on leaving it.
+  var ans = document.getElementById("gsAns"), timer = null, guide = gs.guide;
+  function keepAnswer(){
+    clearTimeout(timer);
+    var cur = itemById("guides", guide), was = (cur && cur.answers[st.id]) || "";
+    if(!ans || ans.value === was) return;
+    var answers = JSON.parse(JSON.stringify((cur && cur.answers) || {}));
+    answers[st.id] = ans.value;
+    saveGuide(guide, {answers:answers});
+  }
+  gs.keepAnswer = keepAnswer;
+  if(ans){
+    ans.value = g.answers[st.id] || "";
+    ans.addEventListener("input", function(){ clearTimeout(timer); timer = setTimeout(keepAnswer, 800); });
+    ans.addEventListener("blur", keepAnswer);
+  }
+  function go(k){ keepAnswer(); gs.gi = k; renderGetStarted(); }
+  function mark(v){
+    keepAnswer();
+    var cur = itemById("guides", guide);
+    var status = JSON.parse(JSON.stringify((cur && cur.status) || {}));
+    status[st.id] = v;
+    saveGuide(guide, {status:status});
+    var pr = guideProgress(def, itemById("guides", guide));
+    if(i < n - 1) go(i + 1);
+    else if(pr.finished){ toast(def.title + ": all done"); gs.step = "guides"; renderGetStarted(); }
+    else go(pr.next);
+  }
+  Array.prototype.forEach.call(body.querySelectorAll("[data-gi]"), function(b){
+    b.addEventListener("click", function(){ go(+b.dataset.gi); });
+  });
+  var cp = document.getElementById("gsGCopy");
+  if(cp) cp.addEventListener("click", function(){ copy(g.drafts[st.id], "Draft copied"); });
+  var more = document.getElementById("gsAddMore");
+  if(more) more.addEventListener("click", function(){
+    var had = state.profile ? state.profile.more.trim() : "";
+    saveProfile({more:(had ? had + "\n\n" : "") + g.summary.trim()});
+    toast("Added to More about you");
+  });
+  document.getElementById("gsGAsk").addEventListener("click", function(){
+    keepAnswer();
+    copy(ask, "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsAll").addEventListener("click", function(){ keepAnswer(); gs.step = "guides"; renderGetStarted(); });
+  document.getElementById("gsGBack").addEventListener("click", function(){ if(i) go(i - 1); });
+  document.getElementById("gsGSkip").addEventListener("click", function(){ mark("skipped"); });
+  document.getElementById("gsGDone").addEventListener("click", function(){ mark("done"); });
 }
 
 var DOC_KINDS = {letter:"Cover letter", reference:"References", writing:"Writing sample", other:"Other"};
@@ -2413,6 +2560,7 @@ function saveGetStarted(){
   var any = Object.keys(fields).some(function(k){ return fields[k]; });
   if(!any){ toast("Nothing to save yet. Fill in a field, or skip for now.", true); return; }
   var first = !state.profile;
+  gs.pdirty = false;
   saveProfile(fields);
   renderProfileButton();
   if(gs.parsedFrom && gs.parsedFrom.length > RESUME_MAX) toast("Saved. Only the first 60,000 characters of the resume were kept.");
@@ -2580,6 +2728,86 @@ function parseFormQuestions(raw, existing){
   return out;
 }
 
+/* ============================ guides ============================ */
+/* Step-by-step guides through chores outside Seed Change. Each step says
+   where to go and what to do; Claude writes a draft for each step (or, in
+   the practice interview, feedback on the answer). Step ids are stable:
+   Claude writes drafts by them, so rename a step's text freely but never
+   its id. Sites change their layouts, so steps name buttons, not places. */
+var GUIDES = {
+  linkedin: {title:"LinkedIn profile", kind:"profile", site:"https://www.linkedin.com/in/me/", siteName:"LinkedIn",
+    intro:"One section at a time: Claude drafts it from your profile and documents, you paste it in and save on LinkedIn.",
+    steps:[
+      {id:"photo", title:"Photo and banner", paste:false,
+        where:"On your profile, click your photo to change it, and the camera icon on the banner. A clear, friendly head-and-shoulders photo gets more views. Nothing to paste."},
+      {id:"headline", title:"Headline", limit:220,
+        where:"Click the pencil by your name (Edit intro) and replace the Headline."},
+      {id:"about", title:"About", limit:2600,
+        where:"Find About on your profile and click its pencil. With no About yet, use Add profile section, then Core, then Add about."},
+      {id:"experience", title:"Experience",
+        where:"In Experience, click the pencil, then the pencil on each role, and replace its description with that role's part of the draft (up to 2,000 characters each)."},
+      {id:"skills", title:"Skills",
+        where:"In Skills, click + to add each skill the draft lists, then pin your top three."},
+      {id:"open", title:"Open to work",
+        where:"Under your name, click Open to, then Finding a new job. Add the job titles, locations and workplace types from the draft. Choose Recruiters only if you'd rather your current employer didn't see it."},
+      {id:"featured", title:"Featured (optional)",
+        where:"Add profile section, then Recommended, then Add featured, and add what the draft suggests. Skip this if there's nothing to show yet."},
+      {id:"url", title:"Custom URL",
+        where:"Click Edit public profile & URL, then change your custom URL to the one the draft suggests, if it's free."}
+    ]},
+  indeed: {title:"Indeed profile", kind:"profile", site:"https://profile.indeed.com/", siteName:"Indeed",
+    intro:"One part of your Indeed profile at a time: Claude drafts it, you paste it in and save on Indeed.",
+    steps:[
+      {id:"resume", title:"Resume",
+        where:"Under Resume, upload a PDF. Save one first from Profile, Resumes (pick the version, then Save PDF). The draft says which version suits the jobs you want."},
+      {id:"summary", title:"Headline and summary",
+        where:"If you use Indeed's own resume rather than a file, edit it and paste in this headline and summary. Skip this if you uploaded a PDF."},
+      {id:"qualifications", title:"Qualifications",
+        where:"Under Improve your job matches, open Qualifications and add each skill, licence, certification and education entry the draft lists."},
+      {id:"preferences", title:"Job preferences",
+        where:"Under Improve your job matches, open Job preferences and set the job titles, minimum pay, job types, schedule and locations from the draft."},
+      {id:"ready", title:"Ready to work and visibility", paste:false,
+        where:"Turn on Ready to work if you can start soon, and choose whether employers can find your resume. Nothing to paste."}
+    ]},
+  interview: {title:"Practice interview", kind:"interview",
+    intro:"Questions an HR screener or a work-placement counsellor would ask. Answer in your own words; Claude gives feedback on each and suggests what to add to your profile.",
+    steps:[
+      {id:"about", title:"Tell me about yourself.",
+        where:"About two minutes: where you are now, what you've done that matters for this kind of work, and what you want next."},
+      {id:"next", title:"Why are you looking now, and what kind of role do you want next?",
+        where:"Keep it forward-looking: what you're moving towards, not away from."},
+      {id:"proud", title:"What work are you proudest of?",
+        where:"One example: what the situation was, what you did, and what came of it. Numbers help."},
+      {id:"problem", title:"Tell me about a problem you solved at work.",
+        where:"Pick one with a clear before and after."},
+      {id:"conflict", title:"Tell me about a disagreement at work, and how it ended.",
+        where:"Show how you listened and what you'd do the same or differently."},
+      {id:"learn", title:"Tell me about something you had to learn quickly.",
+        where:"What you learned, how, and how fast you were useful with it."},
+      {id:"strengths", title:"What are your strengths, and what do you find hard?",
+        where:"Two or three strengths with an example each; one real difficulty and what you do about it."},
+      {id:"workplace", title:"What kind of workplace suits you?",
+        where:"Team size, hours, remote or on site, travel, pace. There are no wrong answers here."},
+      {id:"support", title:"Is there anything that helps you do your best work? (optional)",
+        where:"Training, schedule, tools or accommodations. Share only what you want to."},
+      {id:"history", title:"Is there anything in your history you'd want to explain? (optional)",
+        where:"Gaps, changes of field, short roles: a sentence or two, said plainly, is enough."},
+      {id:"questions", title:"What would you ask the employer?",
+        where:"Two or three questions that show you've thought about the work."}
+    ]}
+};
+/* How far a guide has got: steps done and skipped, and the first step left. */
+function guideProgress(def, g){
+  var status = (g && g.status) || {}, done = 0, skipped = 0, next = -1;
+  def.steps.forEach(function(st, i){
+    var v = status[st.id];
+    if(v === "done") done++;
+    else if(v === "skipped") skipped++;
+    else if(next < 0) next = i;
+  });
+  return {done:done, skipped:skipped, total:def.steps.length, next:next < 0 ? 0 : next, finished:next < 0};
+}
+
 /* ============================ events ============================ */
 document.getElementById("headrow").addEventListener("click", function(e){
   var th = e.target.closest("th"); if(!th) return;
@@ -2678,6 +2906,12 @@ document.getElementById("btnStart").addEventListener("click", openGetStarted);
 document.getElementById("gsTabs").addEventListener("click", function(e){
   var t = e.target.closest("[data-gstab]");
   if(!t || !gs || !dropEdits()) return;
+  if(gs.step === "guide" && gs.keepAnswer) gs.keepAnswer();
+  if(t.dataset.gstab === "profile" && state.profile){        // show the profile as saved now
+    var p = state.profile;
+    Object.keys(gs.f).forEach(function(k){ gs.f[k] = p[k] || ""; });
+    gs.parsedFrom = null;
+  }
   if(t.dataset.gstab === "versions") openResumeVersions("");
   else { gs.step = t.dataset.gstab; gs.doc = null; gs.guide = null; renderGetStarted(); }
 });

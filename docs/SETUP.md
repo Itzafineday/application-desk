@@ -116,6 +116,15 @@ In the page itself:
   Claude** and paste it into your chat. Claude's version appears with notes
   on what it changed. Edit any version and save it as a new one, or click
   **Save PDF**.
+- **Documents** (in **Profile**): add past cover letters, references and
+  writing samples from a file or pasted text. **Copy request: learn how I
+  write** has Claude write a note on your style that it follows from then
+  on; **Copy request: references sheet** makes a sheet you can save as a PDF.
+- **Guides** (in **Profile**): pick LinkedIn, Indeed or the practice
+  interview. Each step says where to click and shows Claude's draft to copy;
+  click **Done** or **Skip** to move on. For drafts, click **Copy request for
+  Claude** and paste it into your chat. If you have Claude in Chrome, Claude
+  reads your current profile first, but never changes anything there.
 - **Help me apply tab:** when a company's own site asks you to fill in a long
   form, copy its questions, paste them here, and click **Copy request for
   Claude**. Paste that into your chat with Claude, and a draft answer appears

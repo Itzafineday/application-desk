@@ -41,6 +41,41 @@
       "file": ""
     }
   ],
+  "guides": [
+    {
+      "id": "interview",
+      "created": "2026-09-22T19:00:00.000Z",
+      "updated": "2026-09-22T19:40:00.000Z",
+      "status": {
+        "about": "done"
+      },
+      "answers": {
+        "about": "I'm a systems administrator. I've done six years in IT, first support at a college, now running servers and identity for a freight company. I like automating things. I want to do more security work."
+      },
+      "drafts": {
+        "about": "Works: it's short and ends on what you want next.\nTighten: lead with the result, not the title, and name one thing you automated.\nStronger: \"I keep 600 people signed in safely and their servers running. Over six years I've gone from college support to running identity for a freight company, where I moved our server builds from two days to an hour. Next I want a role that's mostly security.\""
+      },
+      "summary": "Wants the next role to be mostly security work. Enjoys automation most; the Terraform move is the example to lead with."
+    },
+    {
+      "id": "linkedin",
+      "created": "2026-09-21T18:00:00.000Z",
+      "updated": "2026-09-21T18:20:00.000Z",
+      "status": {
+        "photo": "done",
+        "headline": "done"
+      },
+      "answers": {},
+      "drafts": {
+        "headline": "Systems Administrator | Identity and access, hybrid cloud, automation | Phishing-resistant sign-in for 600 staff",
+        "about": "I keep people signed in safely and their systems running.\n\nFor six years I've looked after hybrid Windows and Linux environments, first in college IT support and now at a freight company, where I run 140 servers and the identity side for 600 staff. I rolled out conditional access and phishing-resistant sign-in with no rise in help desk tickets, and moved our server builds from two days to an hour with Terraform and Ansible.\n\nI'm looking for a role that's mostly security and identity work, in a team that writes things down.",
+        "skills": "Active Directory\nEntra ID\nConditional access\nPowerShell\nTerraform\nAnsible\nAzure\nLinux\nVMware vSphere\nIntune",
+        "open": "Job titles: Systems Administrator, Identity and Access Administrator, Security Administrator\nLocations: Vancouver, BC; Burnaby, BC; remote in BC\nWorkplace: hybrid, remote\nVisible to: recruiters only",
+        "url": "linkedin.com/in/jordan-example"
+      },
+      "summary": ""
+    }
+  ],
   "jobs": [
     {
       "id": "cascade-meridian-k3j9x2q",
