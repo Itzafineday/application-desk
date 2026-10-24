@@ -63,8 +63,8 @@ and only with the owner's OK. Commit first, then:
   (`node --test`, no install needed). Run them before committing any change to
   these, and add a fixture for each new layout. Fixtures must be invented,
   never a real posting, resume or form.
-- `scripts/pack-backup.js`: turns a listing of the `jobs` and `profile`
-  collections into a dated export file and keeps the newest 30 (see Backups).
+- `scripts/pack-backup.js`: turns a listing of the `jobs`, `profile` and
+  `resumes` collections into a dated export file and keeps the newest 30 (see Backups).
 - `scripts/saved-jobs.js`: checks saved jobs against a listing of `jobs` and
   turns saved job pages into new job documents (see Saved jobs).
 - `.claude/skills/`: Claude workflows for this repo.
@@ -90,15 +90,17 @@ artifact tools). Other agents work on code and sample data only.
   to a dated JSON file outside the repo.
 
 ## Backups
-A daily scheduled Claude task, on one machine only, lists the `jobs` and
-`profile` collections into a fresh temporary folder (read-only), then runs
-`node scripts/pack-backup.js <listing>/jobs <backup-folder> --profile <listing>/profile --keep 30`.
+A daily scheduled Claude task, on one machine only, lists the `jobs`,
+`profile` and `resumes` collections into a fresh temporary folder
+(read-only), then runs
+`node scripts/pack-backup.js <listing>/jobs <backup-folder> --profile <listing>/profile --resumes <listing>/resumes --keep 30`.
 The script writes `application-desk-backup-<date>.json` in the export shape,
 so the page's Import can restore it, with the profile (`me.json`) or `null`
-when there is none yet. It refuses to write when the job listing is empty or
-any file is unreadable, warns when the job count drops by more than a fifth
-or the profile disappears since the previous backup, and only rotates files
-with exactly that name. Run it from one machine: two machines writing the
+when there is none yet, and every resume version. It refuses to write when
+the job listing is empty or any file is unreadable, warns when the job count
+drops by more than a fifth, the profile disappears, or there are fewer resume
+versions than in the previous backup, and only rotates files with exactly
+that name. Run it from one machine: two machines writing the
 same synced folder create conflict copies.
 
 ## Saved jobs

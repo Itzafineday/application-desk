@@ -193,8 +193,9 @@ deletes a version, and never changes the profile's `resume` while polishing.
   without a headline, skills, experience or resume text. An imported profile
   replaces the fields it has. The letter text still holds the writer's name
   and contact line for the PDF.
-- `resumes` holds the resume versions (above). Exports from before the
-  polisher have none. Import adds the versions not already there, by `id`.
+- `resumes` holds the resume versions (above), oldest first.
+  `scripts/pack-backup.js` writes them from a listing of `resumes` when given
+  `--resumes`. Exports from before the polisher have none. Import adds the versions not already there, by `id`.
 - Import merges jobs by `id`: a job with a matching id is replaced, others are added.
 
 `public/sample-data.json` uses the export shape, with fictional data only.
