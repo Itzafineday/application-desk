@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 // Packs a listing of the `jobs` collection (one JSON file per job, as Claude
-// saves it with an ArtifactData "list" and an out_dir) into one dated Seed
-// Change export, then keeps only the newest daily backups.
+// saves it with an ArtifactData "list" and an out_dir), and optionally of the
+// `profile` collection, into one dated Seed Change export, then keeps only the
+// newest daily backups.
 //
-//   node scripts/pack-backup.js <jobs-dir> <backup-dir> [--keep 30] [--date YYYY-MM-DD]
+//   node scripts/pack-backup.js <jobs-dir> <backup-dir> [--profile <profile-dir>]
+//                               [--keep 30] [--date YYYY-MM-DD]
 //
 // Writes <backup-dir>/application-desk-backup-<date>.json in the export shape
 // from docs/schema.md, so the page's Import can read it. Only files named
 // exactly like that are rotated: other files in the folder, such as a
 // "-predeploy" copy, are never deleted. If the listing holds no jobs or a file
-// won't parse, it writes nothing and deletes nothing.
+// won't parse, it writes nothing and deletes nothing. The profile is the one
+// document me.json in <profile-dir>; when there is none yet, the export's
+// profile is null.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -28,14 +32,15 @@ function today() {
 }
 
 function parseArgs(argv) {
-  const args = { keep: 30, date: today(), positional: [] };
+  const args = { keep: 30, date: today(), profile: null, positional: [] };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--keep") args.keep = parseInt(argv[++i], 10);
     else if (argv[i] === "--date") args.date = argv[++i];
+    else if (argv[i] === "--profile") args.profile = argv[++i];
     else args.positional.push(argv[i]);
   }
-  if (args.positional.length !== 2) {
-    fail("usage: pack-backup.js <jobs-dir> <backup-dir> [--keep 30] [--date YYYY-MM-DD]");
+  if (args.positional.length !== 2 || args.profile === undefined) {
+    fail("usage: pack-backup.js <jobs-dir> <backup-dir> [--profile <profile-dir>] [--keep 30] [--date YYYY-MM-DD]");
   }
   if (!(args.keep >= 1)) fail("--keep must be a positive number");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(args.date)) fail("--date must be YYYY-MM-DD");
@@ -59,6 +64,27 @@ function readJobs(dir) {
   });
 }
 
+// The profile document, or null when the listing has none (no profile yet).
+function readProfile(dir) {
+  const file = path.join(dir, "me.json");
+  if (!fs.existsSync(file)) return null;
+  let profile;
+  try {
+    profile = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    fail(`${file} is not valid JSON (${e.message})`);
+  }
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) fail(`${file} is not a profile object`);
+  return profile;
+}
+
+// Exports from before v4 carry an empty {name, contact}; only text beyond a
+// name counts as a profile, as in the page's Import.
+function hasProfile(p) {
+  return !!p && ["headline", "skills", "experience", "resume"]
+    .some((f) => typeof p[f] === "string" && p[f].trim());
+}
+
 function dailyBackups(dir) {
   return fs.readdirSync(dir)
     .map((f) => ({ file: f, m: f.match(DAILY) }))
@@ -73,13 +99,16 @@ function main() {
 
   const jobs = readJobs(jobsDir);
   if (!jobs.length) fail(`no jobs in ${jobsDir}; nothing written, nothing deleted`);
+  const profile = args.profile ? readProfile(args.profile) : null;
 
   fs.mkdirSync(backupDir, { recursive: true });
   const previous = dailyBackups(backupDir).find((b) => b.date < args.date);
-  let previousCount = null;
+  let previousCount = null, previousProfile = false;
   if (previous) {
     try {
-      previousCount = JSON.parse(fs.readFileSync(path.join(backupDir, previous.file), "utf8")).jobs.length;
+      const old = JSON.parse(fs.readFileSync(path.join(backupDir, previous.file), "utf8"));
+      previousProfile = hasProfile(old.profile);
+      previousCount = old.jobs.length;
     } catch (e) { /* an unreadable old backup doesn't block a new one */ }
   }
 
@@ -87,7 +116,7 @@ function main() {
   const name = `application-desk-backup-${args.date}.json`;
   const target = path.join(backupDir, name);
   const temp = target + ".tmp";
-  const body = { version: 3, exported: args.date, profile: { name: "", contact: "" }, jobs };
+  const body = { version: 3, exported: args.date, profile, jobs };
   fs.writeFileSync(temp, JSON.stringify(body, null, 2) + "\n");
   fs.renameSync(temp, target);
 
@@ -96,10 +125,15 @@ function main() {
 
   const kept = dailyBackups(backupDir).length;
   const since = previous ? ` (previous: ${previousCount ?? "?"} on ${previous.date})` : "";
-  console.log(`Backed up ${jobs.length} jobs to ${name}${since}. ` +
-    `Keeping ${kept} daily backups; removed ${removed.length}.`);
+  console.log(`Backed up ${jobs.length} jobs ${profile ? "and the profile" : "without a profile"} ` +
+    `to ${name}${since}. Keeping ${kept} daily backups; removed ${removed.length}.`);
   if (previousCount && jobs.length < previousCount * 0.8) {
     console.log(`WARNING: the job count fell from ${previousCount} to ${jobs.length}. ` +
+      `Check Seed Change before older backups rotate out.`);
+  }
+  if (previousProfile && !hasProfile(profile)) {
+    console.log(`WARNING: ${previous.file} has a profile and this backup doesn't` +
+      `${args.profile ? "" : " (no --profile given)"}. ` +
       `Check Seed Change before older backups rotate out.`);
   }
 }

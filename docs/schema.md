@@ -146,7 +146,8 @@ text the other fields came from.
 - `version` is the schema version (v2 exports used `2`, v1 had only `version`
   and `jobs`). It is not a save counter.
 - `profile` is the profile document (above), or `null` when there is none.
-  Exports from before v4, and `scripts/pack-backup.js`, carry
+  `scripts/pack-backup.js` writes it from a listing of `profile` when given
+  `--profile`, and `null` otherwise. Exports from before v4 carry
   `{ "name": "", "contact": "" }` there instead; Import ignores a profile
   without a headline, skills, experience or resume text. An imported profile
   replaces the fields it has. The letter text still holds the writer's name

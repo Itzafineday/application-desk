@@ -57,8 +57,10 @@ Before the first v4 deploy:
 - Check that the two readers load in the published page: pdf.js 3.11.174 and
   mammoth 1.11.0 from cdnjs. They load only when a file is picked, and the
   page says so if they don't; pasting text always works.
-- The daily backup lists only `jobs`. Extend the task and
-  `scripts/pack-backup.js` to carry `profile/me` too.
+- `scripts/pack-backup.js` now packs the profile when given `--profile`, but
+  the daily backup task on the owner's machine still lists only `jobs`. Have
+  it list `profile` too and pass `--profile <listing>/profile` (see Backups
+  in AGENTS.md).
 - Get started will open once for the owner, since there is no profile yet.
 
 ## Later
