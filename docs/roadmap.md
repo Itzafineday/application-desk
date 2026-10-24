@@ -46,22 +46,31 @@ rarely use don't clutter the page.
 
 ### v4 status
 
-First slice deployed 2026-10-24 (see Deploys); the resume polisher is built
-and not deployed yet.
+First slice deployed 2026-10-24 (see Deploys). The resume polisher, documents
+and guides are built and not deployed yet.
 
 | # | Built | Still to do |
 |---|---|---|
-| 1 | Get started: paste a resume or pick a PDF or Word file, check the fields read from it, save the profile (`profile/me`). Skippable at every step; opens by itself once when there is no profile. Its last step offers Resume versions. | Offer the practice interview at the end, once it exists. |
-| 2 | Resume versions (Profile, or Tailor resume on a job's Letter tab): versions in the `resumes` collection, never changed once saved; Claude polishes one in general or for a job and saves a new version with notes; edits save as a new version; any version saves as a PDF. Backups carry the versions (`--resumes`). | Suggestions to accept one at a time, instead of a whole new version. A side-by-side view of what changed. |
-| 3 | Nothing yet. | All of it. |
+| 1 | Get started: paste a resume or pick a PDF or Word file, check the fields read from it, save the profile (`profile/me`). Skippable at every step; opens by itself once when there is no profile. Its last step points to Resumes, Documents and Guides. | Nothing. |
+| 2 | Resume versions (Profile → Resumes, or Tailor resume on a job's Letter tab): versions in the `resumes` collection, never changed once saved; Claude polishes one in general or for a job and saves a new version with notes; edits save as a new version; any version saves as a PDF. | Suggestions to accept one at a time, instead of a whole new version. A side-by-side view of what changed. |
+| 3 | Practice interview (Profile → Guides): eleven HR and work-placement questions, answers saved as typed, Claude's feedback on each, and its suggestions added to the profile in one click. | Running it inside the page, with Claude asking follow-up questions (needs the artifact's `sample` capability). |
 | 4 | Help me apply tab: paste a company form's questions, saved on the job as `form`; Claude drafts each `answer`, shown with a Copy button. | Filling the form through the browser extension for the user to review. |
 | 5 | Renamed. | Nothing. |
+| 6 | Documents (Profile → Documents): past letters, references and writing samples from a file or pasted text; Claude writes a `voice` note from them and makes references sheets, for every job or one. | Choosing references per job right in the page. |
+| 7 | Guides (Profile → Guides) for LinkedIn and Indeed: one section at a time, where to click, Claude's draft to copy with the site's limit, Done or Skip; Claude may read the current profile, read-only. | More guides on the same pattern as other chores come up. |
 
-Before deploying the polisher:
-- No migration: `resumes` is a new collection, and the page reads an empty
-  one as "no versions yet".
-- Have the daily backup task list `resumes` too and pass
-  `--resumes <listing>/resumes` (see Backups in AGENTS.md).
+Before deploying these:
+- No migration: `resumes`, `documents` and `guides` are new collections,
+  and the page reads an empty one as "none yet".
+- Have the daily backup task list the new collections and pass
+  `--resumes`, `--documents` and `--guides` (see Backups in AGENTS.md).
+- **Decide who can read the data.** By default anyone the page is shared
+  with, even view-only, can read its database, which will now hold
+  references' phone numbers and emails. Unshared, it is private. To keep it
+  private even if the link is shared, publish once with
+  `capabilities: { db: { rules: [ { path: "", read: "owner", write: "owner" } ] }, downloads: true }`;
+  later deploys leave `capabilities` out and the rule carries forward. This
+  changes the published page's settings, so it needs the owner's OK.
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
