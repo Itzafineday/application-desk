@@ -1,0 +1,25 @@
+Riley Sample | riley.sample@example.org | 555-0142
+Example Town, AB T0A 0A0
+
+S U M M A R Y
+Network analyst who keeps small offices online. Eight years across help desk,
+networking and vendor management for clinics and schools.
+
+S K I L L S
+Cisco • Meraki • Fortinet • Windows Server
+Microsoft 365 • Vendor management • Documentation
+
+Professional Experience
+Network Analyst, Prairie Example Health Clinics
+2021 – Present
+
+Replaced the wireless network in nine clinics over one summer, with no lost
+clinic days.
+
+Cut help desk tickets by a third by writing setup guides staff could follow.
+Help Desk Lead, Example Town School Division
+2017 – 2021
+- Ran a team of four technicians supporting 3,000 students and staff.
+Page 1 of 2
+EDUCATION
+Network Administration Certificate, Example Polytechnic

@@ -3,7 +3,11 @@
   "exported": "2026-10-01",
   "profile": {
     "name": "Jordan Example",
-    "contact": "Example City, BC | 555-0100 | jordan@example.com"
+    "headline": "Systems Administrator | Hybrid Cloud, Identity and Automation",
+    "skills": "Windows Server, Active Directory, Entra ID\nLinux (Ubuntu, RHEL), Bash, PowerShell\nVMware vSphere, Hyper-V, Azure\nTerraform, Ansible, Git\nMicrosoft 365, Intune, conditional access\nMonitoring and alerting, backup and recovery, incident response",
+    "experience": "Systems Administrator\nMossbank Freight Lines, Example City, BC | 2022 - present\n- Run 140 virtual servers across two sites and an Azure tenant for 600 staff.\n- Moved server builds to Terraform and Ansible, cutting a new server from two days to an hour.\n- Rolled out conditional access and phishing-resistant sign-in for all staff.\n\nIT Support Analyst\nRainshadow College, Example City, BC | 2019 - 2022\n- First and second line support for 1,200 staff and students.\n- Wrote the PowerShell scripts that automated account setup and leavers.\n- Led the move of 300 laptops to Intune.",
+    "resume": "JORDAN EXAMPLE\nSystems Administrator | Hybrid Cloud, Identity and Automation\nExample City, BC | 555-0100 | jordan@example.com | linkedin.com/in/jordan-example\n\nSUMMARY\nSystems administrator with six years of experience running hybrid Windows and Linux environments for mid-sized organizations. Known for automating routine work, tightening identity and access controls, and writing runbooks people actually use.\n\nSKILLS\nWindows Server, Active Directory, Entra ID\nLinux (Ubuntu, RHEL), Bash, PowerShell\nVMware vSphere, Hyper-V, Azure\nTerraform, Ansible, Git\nMicrosoft 365, Intune, conditional access\nMonitoring and alerting, backup and recovery, incident response\n\nEXPERIENCE\nSystems Administrator\nMossbank Freight Lines, Example City, BC | 2022 - present\n• Run 140 virtual servers across two sites and an Azure tenant for 600 staff.\n• Moved server builds to Terraform and Ansible, cutting a new server from two days to an hour.\n• Rolled out conditional access and phishing-resistant sign-in for all staff.\n\nIT Support Analyst\nRainshadow College, Example City, BC | 2019 - 2022\n• First and second line support for 1,200 staff and students.\n• Wrote the PowerShell scripts that automated account setup and leavers.\n• Led the move of 300 laptops to Intune.\n\nEDUCATION\nDiploma, Computer Systems Technology\nRainshadow College | 2019\n\nCERTIFICATIONS\nAzure Administrator Associate",
+    "updated": "2026-10-01T09:00:00.000Z"
   },
   "jobs": [
     {
@@ -87,7 +91,27 @@
       "letter": "Jordan Example\nExample City, BC | 555-0100 | jordan@example.com\n\nSeptember 16, 2026\nHiring Team\nApex Point Financial\nVancouver, BC\n\nRe: Information Security Administrator\n\nI am writing to express my strong interest in the Information Security Administrator role at Apex Point Financial. With six years of systems administration experience emphasizing network perimeter defense, identity governance, and automated vulnerability remediation, I am eager to contribute to the resilience of your financial technology platforms.\n\nIn my recent positions, I have designed and maintained security monitoring frameworks across multi-site office networks. My daily responsibilities have centered on auditing firewall rulesets, managing role-based access controls, and coordinating rapid incident response procedures. When our team identified irregular access patterns, I built automated log aggregation pipelines that reduced incident detection time by forty percent. Additionally, I spearheaded quarterly vulnerability scanning schedules and collaborated with infrastructure engineers to patch high-risk systems without downtime.\n\nApex Point Financial has an outstanding reputation for disciplined technology governance and reliable wealth management services. I thrive in environments where rigorous compliance standards and operational efficiency must go hand in hand. My background in orchestrating multi-factor authentication policies and securing internal data transit aligns closely with the objectives outlined in your posting.\n\nI welcome the opportunity to discuss how my systems security experience and proactive approach to risk reduction will benefit your team. Thank you for your time and consideration.\n\nSincerely,\nJordan Example",
       "questions": [],
       "qSeen": null,
-      "created": "2026-09-15T14:30:00Z"
+      "created": "2026-09-15T14:30:00Z",
+      "form": [
+        {
+          "id": "f-m2v8q1c",
+          "ts": "2026-09-16",
+          "text": "Why are you interested in this role at Apex Point Financial? (max 1000 characters)",
+          "answer": "I like security work that keeps people productive rather than getting in their way. At Mossbank Freight Lines I rolled out conditional access and phishing-resistant sign-in for 600 staff with almost no help desk fallout, and I would like to do that kind of work full time in a team that treats identity as the front line. The posting's focus on segmentation and identity federation is the work I want to grow in."
+        },
+        {
+          "id": "f-r7k3d0x",
+          "ts": "2026-09-16",
+          "text": "Describe your experience with identity and access management.",
+          "answer": "I run Active Directory and Entra ID for about 600 staff: joiners and leavers, group-based access, conditional access policies and sign-in risk reviews. I scripted account setup and removal in PowerShell at Rainshadow College, which cut new-starter setup from a day to under an hour and closed the gap where leavers kept access."
+        },
+        {
+          "id": "f-t4n6w9b",
+          "ts": "2026-09-16",
+          "text": "Are you able to pass an enhanced background check?",
+          "answer": ""
+        }
+      ]
     },
     {
       "id": "cobalt-timber-3p7r8t1",

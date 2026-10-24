@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Application Desk</title>
+<title>Seed Change</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
@@ -241,6 +241,17 @@ textarea.note{min-height:110px;font-size:13px}
 .msg.claude .who{color:var(--accent)}
 .qempty{color:var(--faint);font-size:12.5px;margin-bottom:12px}
 
+/* ---------- help me apply ---------- */
+.fq{border:1px solid var(--line-soft);border-radius:var(--radius);padding:9px 12px;margin-bottom:10px}
+.fq .q{font-size:13px;font-weight:500;line-height:1.55}
+.fq .q .n{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--faint);margin-right:7px}
+.fq .a{
+  white-space:pre-wrap;font-size:13px;line-height:1.6;margin-top:7px;padding:8px 11px;
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius);
+}
+.fq .a.none{background:transparent;border:1px dashed var(--line);color:var(--faint);font-size:12px;padding:5px 11px}
+.fq .rowbtns{margin:7px 0 0;align-items:center}
+
 /* ---------- modal ---------- */
 .scrim{
   position:fixed;inset:0;background:rgba(10,14,18,.55);display:flex;
@@ -271,6 +282,25 @@ textarea.note{min-height:110px;font-size:13px}
 }
 .preview dd{margin:0;font-family:"IBM Plex Mono",monospace;font-size:12px;word-break:break-word}
 
+/* ---------- get started ---------- */
+.gs header .hint{margin-left:auto}
+.gs .lead{margin:0 0 12px;font-size:13px;color:var(--muted)}
+.gs .pick{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.gs label{
+  display:block;margin:14px 0 5px;font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--faint);
+}
+.gs label:first-of-type{margin-top:0}
+.gs input.field{
+  width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:7px 10px;font-size:13px;
+}
+.gs textarea.prose{font-family:inherit;font-size:13px;min-height:96px}
+.gs textarea.prose.tall{min-height:220px}
+.gs .foot .left{margin-right:auto}
+.gs ul{margin:0;padding-left:18px;line-height:1.75}
+.gs .body.drop{outline:2px dashed var(--accent-line);outline-offset:-8px}
+
 /* ---------- toast ---------- */
 .toast{
   position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
@@ -295,12 +325,13 @@ textarea.note{min-height:110px;font-size:13px}
 <div class="shell">
   <header>
     <div class="brand">
-      <h1>Application Desk</h1>
-      <span class="ver">v3</span>
+      <h1>Seed Change</h1>
+      <span class="ver">v4</span>
       <span class="sync" id="sync" data-s="connecting">Connecting…</span>
     </div>
     <div class="stats" id="stats"></div>
     <div class="hactions">
+      <button class="btn ghost" id="btnStart">Get started</button>
       <button class="btn" id="btnAdd">Add postings</button>
       <button class="btn" id="btnSave">Export backup</button>
       <button class="btn ghost" id="btnLoad">Import</button>
@@ -366,6 +397,14 @@ textarea.note{min-height:110px;font-size:13px}
   </div>
 </div>
 
+<div class="scrim" id="gsScrim" hidden>
+  <div class="modal gs" role="dialog" aria-modal="true" aria-labelledby="gsTitle">
+    <header><h2 id="gsTitle">Get started</h2><span class="hint" id="gsStep"></span></header>
+    <div class="body" id="gsBody"></div>
+    <div class="foot" id="gsFoot"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -384,7 +423,10 @@ var MIGRATED_KEY = "appdesk.v3.migrated";   // gitleaks:allow (a storage key nam
 var STATUSES = ["queued","working","applied","interview","offer","closed"];
 var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
-  "fit","notes","posting","letter","questions","qSeen","created"];
+  "fit","notes","posting","letter","questions","qSeen","created","form"];
+/* The profile is one document, filled in by Get started or by Claude. These
+   fields are plain text; any others a document carries are kept as they are. */
+var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -393,9 +435,11 @@ var DEMO = !(window.claude && window.claude.use);
 
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
+var profilePending = null; // profile fields changed here and not yet written
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
+state.profile = DEMO ? null : readCachedProfile();   // null until there is one
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -406,15 +450,35 @@ function readLocal(key){
     return (p && Array.isArray(p.jobs) && p.jobs.length) ? p.jobs : null;
   }catch(e){ return null; }
 }
+function readCachedProfile(){
+  try{
+    var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    return p ? normProfile(p.profile) : null;
+  }catch(e){ return null; }
+}
+/* A profile document, with its text fields as strings, or null for none. */
+function normProfile(p){
+  if(!p || typeof p !== "object" || Array.isArray(p)) return null;
+  var o = JSON.parse(JSON.stringify(p));
+  PROFILE_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+  return o;
+}
+/* Exports from before v4 carry {name, contact}; only text beyond a name
+   makes a profile worth importing. */
+function profileHasText(p){
+  return !!p && ["headline","skills","experience","resume"].some(function(f){
+    return typeof p[f] === "string" && p[f].trim();
+  });
+}
 function normalize(s){
   s.version = 3;
-  s.profile = s.profile || {name:"", contact:""};
   s.jobs = (s.jobs||[]).map(function(j){
     j.id = j.id || uid(j.company);
     j.company = j.company || "Unknown company";
     j.title = j.title || "Untitled role";
     j.status = STATUSES.indexOf(j.status) >= 0 ? j.status : "queued";
     j.questions = Array.isArray(j.questions) ? j.questions : [];
+    j.form = Array.isArray(j.form) ? j.form : [];
     j.fit = (j.fit === 0 || j.fit) ? j.fit : null;
     j.letter = j.letter || "";
     j.notes = j.notes || "";
@@ -436,7 +500,7 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs})); }catch(e){}
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -479,30 +543,54 @@ function removeJob(id){
   if(!store) return;
   store.remove(id).catch(writeFailed);
 }
+/* Change some profile fields, creating the profile if there is none. */
+function saveProfile(fields){
+  var p = state.profile || {};
+  fields.updated = new Date().toISOString();
+  Object.keys(fields).forEach(function(k){ p[k] = fields[k]; });
+  state.profile = normProfile(p);
+  profilePending = profilePending || {};
+  Object.keys(fields).forEach(function(k){ profilePending[k] = fields[k]; });
+  cacheLocal();
+  flushProfile();
+}
+function flushProfile(){
+  if(!store || !profilePending) return; // stays pending until a store is ready
+  var f = profilePending; profilePending = null;
+  store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
+}
 function writeFailed(e){
   var code = e && e.code;
-  if(code === "quota_exceeded") toast("The desk is full. Delete some closed postings, then try again.", true);
-  else if(code === "revoked"){ useStore(browserStore()); toast("Lost access to the shared desk. Reload the page.", true); }
+  if(code === "quota_exceeded") toast("The job list is full. Delete some closed postings, then try again.", true);
+  else if(code === "revoked"){ useStore(browserStore()); toast("Lost access to your saved jobs. Reload the page.", true); }
   else toast("A change did not save. Reload the page and check it.", true);
 }
 
 /* ============================ stores ============================ */
 /* Every store has the same shape, so nothing outside this section knows
-   where the jobs are kept:
+   where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost)    deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache); call
-                              onLost(err) if the connection drops for good
+     start(onJobs, onLost, onProfile)
+                              deliver the whole job list now and after every
+                              change, as onJobs(jobs, fromCache), and the
+                              profile the same way, as onProfile(profile or
+                              null, fromCache); call onLost(err) if the
+                              connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
      remove(id)               delete one job                              -> Promise
+     updateProfile(fields, profile)
+                              merge some fields into the profile; `profile`
+                              is the whole profile, for creating it       -> Promise
    A hosted backend later is one more function returning this shape. */
 
-/* The artifact's shared database (the claude.ai "db" capability). */
+/* The artifact's shared database (the claude.ai "db" capability). The jobs
+   are the `jobs` collection; the profile is the one document `profile/me`. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
+  function profileRef(){ return db.doc("profile/me"); }
 
   /* Copy jobs from the old v2 browser record into the shared database, once. */
   function migrate(){
@@ -523,14 +611,18 @@ function artifactStore(db){
       }
       return next().then(function(){
         try{ localStorage.setItem(MIGRATED_KEY, "1"); }catch(e){}
-        if(todo.length) toast("Moved " + todo.length + " postings into the shared desk");
+        if(todo.length) toast("Moved " + todo.length + " postings into your saved jobs");
       });
     });
   }
 
   return {
     kind: "live",
-    start: function(onJobs, onLost){
+    start: function(onJobs, onLost, onProfile){
+      profileRef().onSnapshot(function(snap){
+        onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
+          snap.metadata.fromCache);
+      }, onLost);
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
       }).then(function(){
@@ -550,7 +642,15 @@ function artifactStore(db){
       });
     },
     put: put,
-    remove: function(id){ return retry(function(){ return ref(id).delete(); }); }
+    remove: function(id){ return retry(function(){ return ref(id).delete(); }); },
+    updateProfile: function(fields, profile){
+      return retry(function(){ return profileRef().update(fields); }).catch(function(e){
+        if(e && e.code === "invalid_argument" && profile){   // no profile yet
+          return retry(function(){ return profileRef().set(profile); });
+        }
+        throw e;
+      });
+    }
   };
 }
 
@@ -558,22 +658,25 @@ function artifactStore(db){
    which cacheLocal() keeps current, so a write has nothing left to do. */
 function browserStore(){
   function done(){ return Promise.resolve(); }
-  return {kind:"local", start:function(){}, update:done, put:done, remove:done};
+  return {kind:"local", start:function(){}, update:done, put:done, remove:done, updateProfile:done};
 }
 
-/* Fictional jobs for trying the page outside claude.ai. Edits stay in the
-   page's memory until it reloads. */
+/* Fictional jobs and profile for trying the page outside claude.ai. Edits
+   stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost){
+    start: function(onJobs, onLost, onProfile){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
-      }).then(function(data){ onJobs((data && data.jobs) || [], false); }, onLost);
+      }).then(function(data){
+        onProfile((data && data.profile) || null, false);
+        onJobs((data && data.jobs) || [], false);
+      }, onLost);
     },
-    update: done, put: done, remove: done
+    update: done, put: done, remove: done, updateProfile: done
   };
 }
 
@@ -617,7 +720,21 @@ function useStore(s){
       return;
     }
     useStore(browserStore());
-    toast("Lost connection to the shared desk. Reload to reconnect.", true);
+    toast("Lost connection to your saved jobs. Reload to reconnect.", true);
+  }, function(p, fromCache){
+    if(store !== s) return;
+    p = normProfile(p);
+    if(!p && fromCache && state.profile) return;
+    if(profilePending){
+      p = p || {};
+      Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+      p = normProfile(p);
+    }
+    state.profile = p;
+    cacheLocal();
+    renderProfileButton();
+    if(!fromCache) offerOnboarding();
+    flushProfile();
   });
 }
 function uid(co){
@@ -781,7 +898,8 @@ var TABS = [
   {k:"brief", label:"Brief"},
   {k:"letter", label:"Letter"},
   {k:"questions", label:"Questions"},
-  {k:"posting", label:"Posting"}
+  {k:"posting", label:"Posting"},
+  {k:"apply", label:"Help me apply"}
 ];
 function job(){ return state.jobs.filter(function(j){return j.id===ui.sel})[0]; }
 
@@ -910,6 +1028,54 @@ function renderTab(){
       if(pc) pc.addEventListener("click", function(){ ui.editPosting = false; renderTab(); });
     }
   }
+
+  else if(ui.tab === "apply"){
+    var list = j.form.map(function(f, i){
+      var answer = typeof f.answer === "string" ? f.answer : "";
+      return '<div class="fq"><div class="q"><span class="n">' + (i+1) + '</span>' + esc(f.text) + '</div>'
+        + (answer.trim() ? '<div class="a">' + esc(answer) + '</div>' : '<div class="a none">No draft yet</div>')
+        + '<div class="rowbtns">'
+        + (answer.trim() ? '<button class="btn sm" data-copy="' + i + '">Copy answer</button>'
+          + '<span class="hint">' + answer.length + ' chars</span>' : '')
+        + '<button class="btn ghost sm" data-remove="' + i + '">Remove</button></div></div>';
+    }).join("");
+    b.innerHTML = '<h3>Application form</h3>'
+      + '<p class="qempty">For company sites with their own application form. Paste its questions below, one per line, then ask Claude in chat to draft answers'
+      + (state.profile ? ' from your profile' : '') + '. Drafts appear under each question for you to check and copy into the form. Claude never submits anything.</p>'
+      + (state.profile ? '' : '<p class="qempty">There is no profile yet, so Claude only has the posting to go on. '
+        + '<button class="btn sm" id="fStart">Get started</button></p>')
+      + list
+      + '<textarea class="field note" id="fBox" placeholder="Paste the form\'s questions, one per line…"></textarea>'
+      + '<div class="rowbtns"><button class="btn primary sm" id="fAdd">Add questions</button>'
+      + (j.form.length ? '<button class="btn sm" id="fCopy">Copy request for Claude</button>' : '') + '</div>';
+    // Look the job up again on each click: a snapshot may have replaced it.
+    Array.prototype.forEach.call(b.querySelectorAll("[data-copy]"), function(btn){
+      btn.addEventListener("click", function(){
+        var f = (job() || j).form[+btn.dataset.copy];
+        if(f) copy(f.answer, "Answer copied");
+      });
+    });
+    Array.prototype.forEach.call(b.querySelectorAll("[data-remove]"), function(btn){
+      btn.addEventListener("click", function(){
+        var jj = job(); if(!jj) return;
+        jj.form.splice(+btn.dataset.remove, 1);
+        touch(jj, ["form"]); renderTab(); toast("Question removed");
+      });
+    });
+    var startBtn = document.getElementById("fStart");
+    if(startBtn) startBtn.addEventListener("click", openGetStarted);
+    document.getElementById("fAdd").addEventListener("click", function(){
+      var jj = job(); if(!jj) return;
+      var raw = document.getElementById("fBox").value;
+      var add = parseFormQuestions(raw, jj.form.map(function(f){ return String(f.text || ""); }));
+      if(!add.length){ toast(raw.trim() ? "No new questions in that paste" : "Paste the form's questions first"); return; }
+      add.forEach(function(t){ jj.form.push({id:uid("f"), ts:today(), text:t, answer:""}); });
+      touch(jj, ["form"]); renderTab();
+      toast("Added " + add.length + " question" + (add.length > 1 ? "s" : ""));
+    });
+    var fc = document.getElementById("fCopy");
+    if(fc) fc.addEventListener("click", function(){ copyFormRequest(job() || j); });
+  }
 }
 
 function fixDashes(t){
@@ -944,7 +1110,17 @@ function copyOpenQuestions(){
     out.push("## " + j.company + " — " + j.title + "  [" + j.id + "]\n" + pending.map(function(p){return "- "+p}).join("\n"));
   });
   if(!out.length){ toast("No open questions"); return; }
-  copy("Questions from the Application Desk:\n\n" + out.join("\n\n"), "Open questions copied");
+  copy("Questions from Seed Change:\n\n" + out.join("\n\n"), "Open questions copied");
+}
+
+/* Ask for drafts of the questions that have none yet (or all of them). */
+function copyFormRequest(j){
+  var todo = j.form.filter(function(f){ return !(typeof f.answer === "string" && f.answer.trim()); });
+  var list = (todo.length ? todo : j.form).map(function(f, i){ return (i+1) + ". " + f.text; });
+  copy("Please draft answers to the application form for " + j.company + " — " + j.title + "  [" + j.id + "]"
+    + " in Seed Change, from my profile and the posting. Save each draft as that question's answer"
+    + " in the Help me apply tab, and don't submit anything.\n\n" + list.join("\n"),
+    "Copied. Paste it into your chat with Claude.");
 }
 
 /* ============================ PDF ============================ */
@@ -1085,10 +1261,12 @@ function loadFile(file){
         if(at >= 0) state.jobs[at] = j; else state.jobs.push(j);
         create(j);
       });
+      var withProfile = profileHasText(parsed.profile);
+      if(withProfile) saveProfile(normProfile(parsed.profile));
       ui.sel = null; renderAll();
-      toast("Imported " + incoming.length + " postings");
+      toast("Imported " + incoming.length + " postings" + (withProfile ? " and the profile" : ""));
     }catch(e){
-      toast("That file is not a Desk export", true);
+      toast("That file is not a Seed Change backup", true);
     }
   };
   r.readAsText(file);
@@ -1384,6 +1562,429 @@ function showPreview(){
   document.getElementById("addHint").textContent = p.company && p.title ? "" : "Check the fields before adding";
 }
 
+/* ============================ resume reader ============================ */
+/* Turns resume text (pasted, or read from a PDF or Word file) into the
+   profile's fields. It only has to get close: the person checks every field
+   before saving, and the whole text is kept as `resume` for Claude. */
+var RESUME_HEADINGS = {
+  summary: /^((professional |career )?summary|(professional )?profile|about( me)?|(career )?objective|overview|((summary|highlights) of )?qualifications|highlights)$/,
+  skills: /^(((technical|core|key|professional|relevant) )?skills( (and|&) [a-z ]+)?|(core )?competencies|areas of expertise|expertise|technologies|tools and technologies|technical proficiencies)$/,
+  experience: /^(((professional|work|relevant|employment|career) )?(experience|history)|employment)$/,
+  other: /^(education( (and|&) training)?|training|certifications?|certificates|licen[cs]es( (and|&) certifications)?|certifications? (and|&) training|projects|(volunteer|community)( experience| work)?|volunteering|awards|honou?rs|achievements|references|interests|hobbies|languages|publications|courses|activities|affiliations|memberships)$/
+};
+// Bullet marks, including the private-use glyphs Word's symbol font leaves in PDFs.
+var BULLET_MARK = "•·▪●◦‣∙○■□➢►✓✔*\uf0a7\uf0b7\uf076\uf0d8\uf0fc";
+var BULLET = new RegExp("^([" + BULLET_MARK + "]|[-–—](?=\\s|$))\\s*");
+var BULLET_ONLY = new RegExp("^[" + BULLET_MARK + "]$");
+var RESUME_SEP = /\s+[|•·▪●◆]\s+/;
+
+function resumeHeading(line){
+  var l = line;
+  if(/^([A-Za-z] ){3,}[A-Za-z]$/.test(l)) l = l.replace(/ /g, "");   // "S K I L L S"
+  if(l.length > 40 || /[.!?,;]$/.test(l)) return null;
+  l = l.toLowerCase().replace(/:$/, "").replace(/[^a-z& ]+/g, " ").replace(/\s+/g, " ").trim();
+  for(var k in RESUME_HEADINGS){ if(RESUME_HEADINGS[k].test(l)) return k; }
+  return null;
+}
+/* An email, phone number, link, or a bare "City, BC" line. */
+function contactish(l){
+  return /\S+@\S+\.\S+/.test(l) || /\b\d{3}[ .-]\d{4}\b/.test(l)
+    || /(https?:\/\/|www\.|linkedin\.com|github\.com)/i.test(l)
+    || /^[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}( [A-Z]\d[A-Z] ?\d[A-Z]\d)?$/.test(l);
+}
+function nameLike(l){
+  var words = l.split(" ").length;
+  return words >= 2 && words <= 5 && l.length <= 50
+    && /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’.,\- ]+$/.test(l) && !resumeHeading(l);
+}
+/* "JORDAN O'NEIL-EXAMPLE" -> "Jordan O'Neil-Example"; mixed case is kept. */
+function nameCase(l){
+  if(l !== l.toUpperCase()) return l;
+  return l.toLowerCase().replace(/(^|[\s'’\-])([a-zà-öø-ÿ])/g, function(m, a, b){ return a + b.toUpperCase(); });
+}
+function skillText(lines){
+  return lines.map(function(l){
+    return l.replace(BULLET, "").replace(new RegExp(RESUME_SEP.source, "g"), ", ").trim();
+  }).filter(Boolean).join("\n");
+}
+/* Bullets become "- ", a line wrapped onto the next joins it again, and a
+   blank line goes before each role (a plain line that follows bullets). */
+function experienceText(lines){
+  var items = [], nextIsBullet = false;
+  lines.forEach(function(l){
+    if(BULLET_ONLY.test(l)){ nextIsBullet = true; return; }   // a mark on a line of its own
+    var isBullet = nextIsBullet || BULLET.test(l), text = l.replace(BULLET, "");
+    var prev = items[items.length-1];
+    nextIsBullet = false;
+    if(!isBullet && prev && /^[a-z(]/.test(text) && !/[.!?:]$/.test(prev.text)){ prev.text += " " + text; return; }
+    items.push({text:text, bullet:isBullet});
+  });
+  // Some PDFs draw bullets as shapes, leaving no marks in the text. Then a
+  // line that ends like a sentence is read as a bullet, the rest as roles.
+  if(!items.some(function(it){ return it.bullet; })){
+    items.forEach(function(it){ it.bullet = /[.!?]$/.test(it.text); });
+  }
+  var out = [];
+  items.forEach(function(it, i){
+    if(!it.bullet && i && items[i-1].bullet) out.push("");
+    out.push(it.bullet ? "- " + it.text : it.text);
+  });
+  return out.join("\n");
+}
+function parseResume(text){
+  var lines = String(text || "").replace(/\r/g, "").split("\n").map(function(l){
+    return l.replace(/\s+/g, " ").trim();
+  }).filter(function(l){ return l && !/^page \d+( of \d+)?$/i.test(l); });
+
+  var sec = {top:[], summary:[], skills:[], experience:[], other:[]}, cur = "top";
+  lines.forEach(function(l){
+    var h = resumeHeading(l);
+    if(h) cur = h; else sec[cur].push(l);
+  });
+
+  var out = {name:"", headline:"", skills:skillText(sec.skills), experience:experienceText(sec.experience)};
+  // The name: one of the first lines, before any contact details on it.
+  var top = sec.top, at = -1;
+  for(var i=0; i<top.length && i<6; i++){
+    if(/^(curriculum vitae|r[eé]sum[eé]|cv)$/i.test(top[i])) continue;
+    var first = top[i].split(RESUME_SEP)[0];
+    if(!contactish(first) && nameLike(first)){ out.name = nameCase(first); at = i; break; }
+  }
+  // The headline: a short line just under the name, without contact details.
+  for(var k=at+1; k<top.length && k<=at+3; k++){
+    var parts = top[k].split(RESUME_SEP), keep = [];
+    for(var p=0; p<parts.length && !contactish(parts[p]); p++) keep.push(parts[p]);
+    var line = keep.join(" | ");
+    if(line.length >= 3 && line.length <= 120){ out.headline = line; break; }
+  }
+  // Or the summary's first sentence, if it is short enough to read as one.
+  if(!out.headline && sec.summary.length){
+    var s = sec.summary.join(" ").replace(BULLET, "").match(/^.*?[.!?](\s|$)/);
+    s = (s ? s[0] : sec.summary[0]).trim();
+    if(s.length <= 160) out.headline = s;
+  }
+  return out;
+}
+/* One page of pdf.js text items as lines: a new line wherever the baseline
+   moves or pdf.js marks an end of line, and a space where items have a gap. */
+function pdfPageText(items){
+  var lines = [], line = "", lastY = null, lastEnd = null;
+  items.forEach(function(it){
+    if(typeof it.str !== "string") return;
+    var x = it.transform[4], y = it.transform[5];
+    if(lastY !== null && Math.abs(y - lastY) > 2){ lines.push(line); line = ""; lastEnd = null; }
+    else if(lastEnd !== null && x - lastEnd > 1 && line && !/\s$/.test(line) && !/^\s/.test(it.str)) line += " ";
+    line += it.str;
+    lastY = y; lastEnd = x + (it.width || 0);
+    if(it.hasEOL){ lines.push(line); line = ""; lastY = null; lastEnd = null; }
+  });
+  if(line) lines.push(line);
+  return lines.map(function(l){ return l.replace(/\s+/g, " ").trim(); }).join("\n")
+    .replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/* ============================ get started ============================ */
+/* Optional, and skippable at every step: bring in a resume, check what was
+   read from it, save the profile. Opened from the header button, and once by
+   itself when the store says there is no profile yet, unless it was skipped
+   in this browser before. */
+var SKIP_KEY = "appdesk.v4.getstarted";
+var RESUME_MAX = 60000;                // characters of resume text kept
+var PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+var MAMMOTH = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.11.0/mammoth.browser.min.js";
+var gs = null;                         // the open flow, or null
+var gsOffered = false;
+
+function renderProfileButton(){
+  document.getElementById("btnStart").textContent = state.profile ? "Profile" : "Get started";
+}
+function offerOnboarding(){
+  if(gsOffered || gs || state.profile || !store || store.kind === "local") return;
+  gsOffered = true;
+  var skipped = false;
+  try{ skipped = localStorage.getItem(SKIP_KEY) === "skipped"; }catch(e){}
+  if(skipped || !document.getElementById("addScrim").hidden) return;
+  openGetStarted();
+}
+function openGetStarted(){
+  var p = state.profile || {};
+  gs = {step: state.profile ? "profile" : "resume", text:"", parsedFrom:null, note:"", noSections:false,
+    f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||""}};
+  document.getElementById("gsScrim").hidden = false;
+  renderGetStarted();
+}
+function closeGetStarted(skipped){
+  if(skipped && !state.profile){
+    if(!DEMO){ try{ localStorage.setItem(SKIP_KEY, "skipped"); }catch(e){} }
+    toast("Skipped. Get started is at the top whenever you want it.");
+  }
+  document.getElementById("gsScrim").hidden = true;
+  gs = null;
+}
+function gsNote(msg){
+  gs.note = msg;
+  var el = document.getElementById("gsNote");
+  if(el) el.textContent = msg;
+}
+
+function renderGetStarted(){
+  var had = !!state.profile;
+  var body = document.getElementById("gsBody"), foot = document.getElementById("gsFoot");
+  var title = document.getElementById("gsTitle"), stepEl = document.getElementById("gsStep");
+  body.classList.remove("drop");
+
+  if(gs.step === "resume"){
+    title.textContent = had ? "Replace from a resume" : "Get started";
+    stepEl.textContent = had ? "" : "Step 1 of 2";
+    body.innerHTML = '<p class="lead">' + (had
+        ? "Read a newer resume. You can check every field before anything is saved."
+        : "Add your resume so Claude can judge how well each job fits, draft letters, and answer application forms from it. Every step is optional.")
+      + '</p><div class="pick"><button class="btn" id="gsPick">Choose a PDF or Word file</button>'
+      + '<span class="hint" id="gsNote"></span></div>'
+      + '<input type="file" id="gsFile" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>'
+      + '<textarea class="field" id="gsText" placeholder="…or paste the text of your resume here"></textarea>'
+      + '<p class="hint">The file is read here in your browser; only its text is kept.</p>';
+    foot.innerHTML = '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
+      + (had ? '<button class="btn" id="gsBack">Back</button>' : '')
+      + '<button class="btn primary" id="gsNext">Next</button>';
+    var box = document.getElementById("gsText");
+    box.value = gs.text;
+    document.getElementById("gsNote").textContent = gs.note;
+    box.addEventListener("input", function(){ gs.text = box.value; });
+    document.getElementById("gsPick").addEventListener("click", function(){ document.getElementById("gsFile").click(); });
+    document.getElementById("gsFile").addEventListener("change", function(e){
+      if(e.target.files && e.target.files[0]) readResumeFile(e.target.files[0]);
+      e.target.value = "";
+    });
+    if(had) document.getElementById("gsBack").addEventListener("click", function(){ gs.step = "profile"; renderGetStarted(); });
+    document.getElementById("gsNext").addEventListener("click", function(){
+      gs.text = box.value.trim();
+      if(!gs.text) gs.parsedFrom = null;
+      else if(gs.text !== gs.parsedFrom){
+        var r = parseResume(gs.text);
+        Object.keys(gs.f).forEach(function(k){ gs.f[k] = r[k] || gs.f[k]; });
+        gs.parsedFrom = gs.text;
+        gs.noSections = !r.skills && !r.experience;
+      }
+      gs.step = "profile"; renderGetStarted();
+    });
+    box.focus();
+  }
+
+  else if(gs.step === "profile"){
+    title.textContent = had ? "Your profile" : "Check your profile";
+    stepEl.textContent = had ? "" : "Step 2 of 2";
+    body.innerHTML = '<p class="lead">' + (gs.parsedFrom
+        ? "This is what was read from your resume. Fix anything that's off; it's all plain text."
+        : "Plain text that Claude uses for fit scores, letters and application answers. Fill in what you like.")
+      + (gs.parsedFrom && gs.noSections ? " No skills or experience headings were found, so fill those in if you like. Claude still reads the whole resume." : "")
+      + '</p>'
+      + '<label for="gsName">Name</label><input class="field" id="gsName" autocomplete="off">'
+      + '<label for="gsHeadline">Headline</label><input class="field" id="gsHeadline" autocomplete="off" placeholder="The kind of work you do or want, in one line">'
+      + '<label for="gsSkills">Skills</label><textarea class="field prose" id="gsSkills"></textarea>'
+      + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>';
+    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost left" id="gsReplace">Replace from a resume</button>' : '')
+      + (gs.parsedFrom || !had ? '<button class="btn" id="gsBack">Back</button>' : '')
+      + '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
+      + '<button class="btn primary" id="gsSave">Save profile</button>';
+    var map = {name:"gsName", headline:"gsHeadline", skills:"gsSkills", experience:"gsExp"};
+    Object.keys(map).forEach(function(k){
+      var el = document.getElementById(map[k]);
+      el.value = gs.f[k];
+      el.addEventListener("input", function(){ gs.f[k] = el.value; });
+    });
+    var rp = document.getElementById("gsReplace");
+    if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    var bk = document.getElementById("gsBack");
+    if(bk) bk.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    document.getElementById("gsSave").addEventListener("click", saveGetStarted);
+    document.getElementById("gsName").focus();
+  }
+
+  else {
+    title.textContent = "Profile saved";
+    stepEl.textContent = "";
+    body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
+      + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
+      + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
+      + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
+    foot.innerHTML = '<button class="btn primary" id="gsDone">Done</button>';
+    document.getElementById("gsDone").addEventListener("click", function(){ closeGetStarted(false); });
+    document.getElementById("gsDone").focus();
+  }
+
+  var skip = document.getElementById("gsSkip");
+  if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
+}
+
+function saveGetStarted(){
+  var fields = {};
+  Object.keys(gs.f).forEach(function(k){ fields[k] = gs.f[k].trim(); });
+  if(gs.parsedFrom) fields.resume = gs.parsedFrom.slice(0, RESUME_MAX);
+  var any = Object.keys(fields).some(function(k){ return fields[k]; });
+  if(!any){ toast("Nothing to save yet. Fill in a field, or skip for now.", true); return; }
+  var first = !state.profile;
+  saveProfile(fields);
+  renderProfileButton();
+  if(gs.parsedFrom && gs.parsedFrom.length > RESUME_MAX) toast("Saved. Only the first 60,000 characters of the resume were kept.");
+  if(first){ gs.step = "done"; renderGetStarted(); }
+  else { closeGetStarted(false); toast("Profile saved"); }
+}
+
+/* Read a picked or dropped file into the resume box. The readers load from
+   cdnjs the first time they are needed, so the page itself stays light. */
+function readResumeFile(file){
+  var name = file.name || "the file";
+  var kind = (/\.pdf$/i.test(name) || file.type === "application/pdf") ? "pdf"
+    : /\.docx$/i.test(name) ? "docx" : /\.doc$/i.test(name) ? "doc" : "";
+  if(kind === "doc"){ gsNote("Older .doc files can't be read here. Save it as .docx or PDF, or paste the text."); return; }
+  if(!kind){ gsNote("Pick a PDF or a Word (.docx) file, or paste the text."); return; }
+  if(file.size > 10*1024*1024){ gsNote("That file is over 10 MB. Paste the text instead."); return; }
+  gsNote("Reading " + name + "…");
+  var flow = gs, r = new FileReader();
+  r.onload = function(){
+    (kind === "pdf" ? readPdf(r.result) : readDocx(r.result)).then(function(text){
+      if(gs !== flow) return;                       // closed or reopened meanwhile
+      text = text.trim();
+      if(!text){
+        gsNote(kind === "pdf" ? "This PDF has no text to read (it may be a scan). Paste the text instead." : "No text found in that file.");
+        return;
+      }
+      gs.text = text;
+      var box = document.getElementById("gsText");
+      if(box) box.value = text;
+      gsNote("Read " + name + ". Check the text, then Next.");
+    }, function(e){
+      if(gs !== flow) return;
+      gsNote(e && e.code === "load" ? "The reader didn't load. Check your connection, or paste the text instead."
+        : e && e.name === "PasswordException" ? "This PDF is password-protected. Paste the text instead."
+        : "Couldn't read that file. Paste the text instead.");
+    });
+  };
+  r.onerror = function(){ if(gs === flow) gsNote("Couldn't open that file. Paste the text instead."); };
+  r.readAsArrayBuffer(file);
+}
+
+var loadedScripts = {};
+function loadScripts(srcs){
+  var key = srcs.join(" ");
+  if(!loadedScripts[key]){
+    loadedScripts[key] = srcs.reduce(function(prev, src){
+      return prev.then(function(){
+        return new Promise(function(res, rej){
+          var s = document.createElement("script");
+          s.src = src;
+          s.onload = res;
+          s.onerror = function(){
+            s.parentNode.removeChild(s);
+            var e = new Error("Could not load " + src); e.code = "load"; rej(e);
+          };
+          document.head.appendChild(s);
+        });
+      });
+    }, Promise.resolve()).catch(function(e){ delete loadedScripts[key]; throw e; });
+  }
+  return loadedScripts[key];
+}
+/* pdf.js 3.11.174 is the last release with plain (non-module) scripts. Its
+   worker script is loaded onto the page too, so pdf.js reads here instead of
+   starting a Web Worker, which the artifact's sandbox may not allow.
+   isEvalSupported:false closes CVE-2024-4367, which affects this version. */
+function readPdf(buf){
+  return loadScripts([PDFJS + "pdf.min.js", PDFJS + "pdf.worker.min.js"]).then(function(){
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js";
+    return window.pdfjsLib.getDocument({data: new Uint8Array(buf), isEvalSupported: false}).promise;
+  }).then(function(doc){
+    var texts = [], n = 0, last = Math.min(doc.numPages, 20);
+    function next(){
+      if(++n > last){ doc.destroy(); return texts.join("\n\n"); }
+      return doc.getPage(n).then(function(page){ return page.getTextContent(); })
+        .then(function(tc){ texts.push(pdfPageText(tc.items)); return next(); });
+    }
+    return next();
+  });
+}
+function readDocx(buf){
+  return loadScripts([MAMMOTH]).then(function(){
+    return window.mammoth.convertToHtml({arrayBuffer: buf});
+  }).then(function(result){ return docxText(result.value); });
+}
+/* Word paragraphs and list items as lines, list items marked "• " so the
+   resume reader sees the bullets (mammoth's plain-text output drops them). */
+function docxText(html){
+  var doc = new DOMParser().parseFromString(html, "text/html"), out = [];
+  Array.prototype.forEach.call(doc.querySelectorAll("br"), function(br){
+    br.parentNode.replaceChild(doc.createTextNode("\n"), br);
+  });
+  function push(text, mark){
+    text.split("\n").forEach(function(t, i){
+      t = t.replace(/\s+/g, " ").trim();
+      if(t) out.push((mark && !i ? mark : "") + t);
+    });
+  }
+  function walk(node){
+    Array.prototype.forEach.call(node.children, function(el){
+      if(el.tagName === "LI"){
+        var own = "";
+        Array.prototype.forEach.call(el.childNodes, function(c){
+          if(!/^(UL|OL)$/.test(c.nodeName)) own += c.textContent;
+        });
+        push(own, "• ");
+        Array.prototype.forEach.call(el.children, function(c){ if(/^(UL|OL)$/.test(c.tagName)) walk(c); });
+      }
+      else if(/^(P|H[1-6])$/.test(el.tagName)) push(el.textContent);
+      else walk(el);
+    });
+  }
+  walk(doc.body);
+  return out.join("\n");
+}
+
+/* ============================ form questions ============================ */
+/* Splits questions pasted from a company's own application form into one
+   per line, leaving out what a copied form brings along: list numbers,
+   required marks, buttons, file pickers, yes/no choices and placeholders.
+   A line that only states a length limit joins the question above it. */
+var FORM_NOISE = /^(required|optional|select( an? (option|one))?|please select|choose( one| an option)?|yes|no|n\/a|answer|your answer|type here|enter text|upload( (a |your )?(file|resume|cv|cover letter))?|attach( a file)?|choose file|browse|no file chosen|drop files? here.*|or drag and drop.*|submit( application)?|next|back|previous|save|continue|save (and|&) continue|cancel|step \d+( of \d+)?\b.*)$/i;
+
+function cleanFormLine(l){
+  return l.replace(/\s+/g, " ").trim()
+    .replace(/^(\*\s*)+/, "")                                         // a leading required mark
+    .replace(/^([•·▪●\-–—]|\(?(q(uestion)?\s*)?\d{1,2}[.):]|\(?[a-h][.)])(?=\s)\s*/i, "")   // bullets, numbers
+    .replace(/\s*(\*|\(required\)|- required)$/i, "")                // a trailing required mark
+    .trim();
+}
+/* "0/1000", "Maximum 250 words", "500 characters remaining" -> "max 1000
+   characters" and so on; "" for any other line. */
+function formLimit(l){
+  var t = l.replace(/^\(/, "").replace(/\)\.?$/, "").trim();
+  var m = t.match(/^\d[\d,]*\s*\/\s*(\d[\d,]*)(\s*(characters?|chars|words))?$/i)
+    || t.match(/^(?:max(?:imum)?|limit(?:ed to)?|up to|no more than|(?:characters?|chars|words) (?:remaining|left|allowed))\s*:?\s*(\d[\d,]*)(\s*(characters?|chars|words))?$/i)
+    || t.match(/^(\d[\d,]*)\s*(characters?|chars|words)(\s+(max(imum)?|limit|remaining|left|allowed|or (less|fewer)))?$/i);
+  return m ? "max " + m[1] + (/word/i.test(t) ? " words" : " characters") : "";
+}
+/* The new questions in a paste, skipping any already in `existing`. */
+function parseFormQuestions(raw, existing){
+  var seen = {}, out = [], attach = false;   // attach: the last question was kept
+  function key(t){   // the same question, whatever its case, marks or added limit
+    return t.toLowerCase().replace(/\s*\(max [\d,]+ (characters|words)\)$/, "").replace(/[^a-z0-9]+/g, "");
+  }
+  (existing || []).forEach(function(t){ seen[key(t)] = 1; });
+  String(raw || "").replace(/\r/g, "").split("\n").forEach(function(line){
+    var l = cleanFormLine(line), limit = formLimit(l), last = out.length - 1;
+    if(limit){
+      if(attach && out[last].toLowerCase().indexOf(limit) < 0) out[last] += " (" + limit + ")";
+      return;
+    }
+    if(!/[A-Za-z]/.test(l) || FORM_NOISE.test(l.replace(/[.:…]+$/, ""))) return;
+    attach = !seen[key(l)];
+    if(!attach) return;
+    seen[key(l)] = 1;
+    out.push(l);
+  });
+  return out;
+}
+
 /* ============================ events ============================ */
 document.getElementById("headrow").addEventListener("click", function(e){
   var th = e.target.closest("th"); if(!th) return;
@@ -1458,7 +2059,7 @@ document.getElementById("addConfirm").addEventListener("click", function(){
     document.getElementById("addScrim").hidden = true;
     ui.filter = "all"; ui.sel = dup.id; ui.tab = "brief";
     renderAll();
-    toast("Already on the desk: " + dup.company + " (" + dup.status + ")");
+    toast("Already saved: " + dup.company + " (" + dup.status + ")");
     return;
   }
   var linkOnly = /^https?:\/\/\S+$/.test(raw.trim());
@@ -1478,8 +2079,22 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   renderAll(); renderDrawer();
   toast("Added " + j.company);
 });
+document.getElementById("btnStart").addEventListener("click", openGetStarted);
+var gsBody = document.getElementById("gsBody");
+gsBody.addEventListener("dragover", function(e){
+  if(!gs || gs.step !== "resume") return;
+  e.preventDefault(); gsBody.classList.add("drop");
+});
+gsBody.addEventListener("dragleave", function(){ gsBody.classList.remove("drop"); });
+gsBody.addEventListener("drop", function(e){
+  gsBody.classList.remove("drop");
+  if(!gs || gs.step !== "resume") return;
+  e.preventDefault();
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) readResumeFile(e.dataTransfer.files[0]);
+});
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
+    if(gs){ closeGetStarted(true); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
   }
@@ -1492,7 +2107,7 @@ function refresh(){
   var editing = a && a.closest && a.closest("#dBody") && /^(TEXTAREA|INPUT)$/.test(a.tagName);
   renderDrawer(editing);
 }
-function renderAll(){ renderStats(); renderChips(); renderHead(); renderRows(); renderDrawer(); }
+function renderAll(){ renderStats(); renderChips(); renderHead(); renderRows(); renderDrawer(); renderProfileButton(); }
 renderAll();
 connect();
 })();

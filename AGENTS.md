@@ -1,6 +1,7 @@
-# Application Desk: instructions for agents working on this repo
+# Seed Change: instructions for agents working on this repo
 
-A job application tracker in one HTML page: paste a posting, track its status,
+Seed Change (formerly Application Desk; the repo keeps the old name) is a job
+application tracker in one HTML page: paste a posting, track its status,
 score the fit, draft a cover letter and save it as a PDF, and keep a question
 thread per job. No build step.
 
@@ -55,12 +56,15 @@ and only with the owner's OK. Commit first, then:
 - `public/index.html`: the whole app (styles, markup, script).
 - `docs/schema.md`: the data model. Update it with any field change.
 - `docs/roadmap.md`: build order and status.
-- `public/sample-data.json`: fictional jobs for the demo and for tests.
-- `tests/`: parser and script tests on fictional pastes (`node --test`, no
-  install needed). Run them before committing any change to the paste parser, and add
-  a fixture for each new layout. Fixtures must be invented, never a real posting.
-- `scripts/pack-backup.js`: turns a listing of the `jobs` collection into a
-  dated export file and keeps the newest 30 (see Backups).
+- `public/sample-data.json`: fictional jobs and profile for the demo and for
+  tests.
+- `tests/`: tests for the paste parser, the resume reader, the form question
+  splitter, the backup packer and the saved-jobs script, on fictional data
+  (`node --test`, no install needed). Run them before committing any change to
+  these, and add a fixture for each new layout. Fixtures must be invented,
+  never a real posting, resume or form.
+- `scripts/pack-backup.js`: turns a listing of the `jobs` and `profile`
+  collections into a dated export file and keeps the newest 30 (see Backups).
 - `scripts/saved-jobs.js`: checks saved jobs against a listing of `jobs` and
   turns saved job pages into new job documents (see Saved jobs).
 - `.claude/skills/`: Claude workflows for this repo.
@@ -73,20 +77,25 @@ artifact tools). Other agents work on code and sample data only.
 - Questions: append `{ id, ts, who: "claude", text }` to `questions`. Never
   edit, remove or reorder existing entries, and leave `qSeen` alone (the page
   sets it when the owner reads the thread).
+- Help me apply: draft answers into `answer` on the entries in a job's `form`,
+  from the profile (`profile/me`) and the posting. Never remove or reorder
+  entries. Never submit an application, or anything else, on a company site.
 - Pin every write to the document version you read, so a change made in the
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection
   to a dated JSON file outside the repo.
 
 ## Backups
-A daily scheduled Claude task, on one machine only, lists the `jobs`
-collection into a fresh temporary folder (read-only), then runs
-`node scripts/pack-backup.js <listing>/jobs <backup-folder> --keep 30`. The
-script writes `application-desk-backup-<date>.json` in the export shape, so
-the page's Import can restore it. It refuses to write when the listing is
-empty or unreadable, warns when the job count drops by more than a fifth, and
-only rotates files with exactly that name. Run it from one machine: two
-machines writing the same synced folder create conflict copies.
+A daily scheduled Claude task, on one machine only, lists the `jobs` and
+`profile` collections into a fresh temporary folder (read-only), then runs
+`node scripts/pack-backup.js <listing>/jobs <backup-folder> --profile <listing>/profile --keep 30`.
+The script writes `application-desk-backup-<date>.json` in the export shape,
+so the page's Import can restore it, with the profile (`me.json`) or `null`
+when there is none yet. It refuses to write when the job listing is empty or
+any file is unreadable, warns when the job count drops by more than a fifth
+or the profile disappears since the previous backup, and only rotates files
+with exactly that name. Run it from one machine: two machines writing the
+same synced folder create conflict copies.
 
 ## Saved jobs
 The page can't sign in to LinkedIn or Indeed, so picking up the jobs the
