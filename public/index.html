@@ -439,8 +439,15 @@ var FIELDS = ["company","title","band","location","url","source","posted","appli
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
 var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
-/* Resume versions: one document each, never changed once saved. */
-var RESUME_TEXT = ["id","created","label","job","text","notes","by","base"];
+/* The collections beside the jobs, one document per item: resume versions
+   (never changed once saved), documents (letters, references, writing) and
+   guides (progress through the LinkedIn, Indeed and interview steps). Text
+   fields are kept as strings, maps as objects, and lists sort by `order`. */
+var ITEMS = {
+  resumes:   {text:["id","created","label","job","text","notes","by","base"], order:"created"},
+  documents: {text:["id","added","kind","title","text","file"], order:"added"},
+  guides:    {text:["id","created","updated","summary"], maps:["status","answers","drafts"], order:"id"}
+};
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -450,12 +457,12 @@ var DEMO = !(window.claude && window.claude.use);
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var profilePending = null; // profile fields changed here and not yet written
-var resumesPending = [];   // resume versions made here and not yet written
+var itemsPending = [];     // item writes made here and not yet sent: {op, coll, id, item, fields}
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
 state.profile = DEMO ? null : readCachedProfile();   // null until there is one
-state.resumes = DEMO ? [] : readCachedResumes();     // oldest first
+Object.keys(ITEMS).forEach(function(c){ state[c] = DEMO ? [] : readCachedItems(c); });
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -472,22 +479,25 @@ function readCachedProfile(){
     return p ? normProfile(p.profile) : null;
   }catch(e){ return null; }
 }
-function readCachedResumes(){
+function readCachedItems(coll){
   try{
     var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    return normResumes(p && p.resumes);
+    return normItems(coll, p && p[coll]);
   }catch(e){ return []; }
 }
-/* Resume versions with their text fields as strings, oldest first. */
-function normResumes(list){
+/* One collection's items with their fields in shape, in the collection's order. */
+function normItems(coll, list){
+  var def = ITEMS[coll];
   return (Array.isArray(list) ? list : []).filter(function(r){
     return r && typeof r === "object" && r.id;
   }).map(function(r){
     var o = JSON.parse(JSON.stringify(r));
-    RESUME_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    def.text.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    (def.maps || []).forEach(function(f){ o[f] = o[f] && typeof o[f] === "object" && !Array.isArray(o[f]) ? o[f] : {}; });
     return o;
-  }).sort(function(a, b){ return a.created < b.created ? -1 : a.created > b.created ? 1 : 0; });
+  }).sort(function(a, b){ var x = a[def.order], y = b[def.order]; return x < y ? -1 : x > y ? 1 : 0; });
 }
+function itemById(coll, id){ return state[coll].filter(function(r){ return r.id === id; })[0]; }
 /* A profile document, with its text fields as strings, or null for none. */
 function normProfile(p){
   if(!p || typeof p !== "object" || Array.isArray(p)) return null;
@@ -532,7 +542,10 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile, resumes:state.resumes})); }catch(e){}
+    // Documents can be long, so the cache keeps them without their text.
+    var docs = state.documents.map(function(d){ var o = {}; Object.keys(d).forEach(function(k){ if(k !== "text") o[k] = d[k]; }); return o; });
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile,
+      resumes:state.resumes, documents:docs, guides:state.guides})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -591,17 +604,47 @@ function flushProfile(){
   var f = profilePending; profilePending = null;
   store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
 }
-/* Add one resume version. Versions are never changed, so this is a create. */
-function saveResume(r){
-  state.resumes = normResumes(state.resumes.concat([r]));
-  resumesPending.push(r);
-  cacheLocal();
-  flushResumes();
+/* Create or replace one item, change some of its fields, or remove it. */
+function saveItem(coll, item){
+  state[coll] = normItems(coll, state[coll].filter(function(r){ return r.id !== item.id; }).concat([item]));
+  queueItem({op:"put", coll:coll, id:item.id, item:item});
 }
-function flushResumes(){
+function changeItem(coll, id, fields){
+  var r = itemById(coll, id) || {id:id};
+  Object.keys(fields).forEach(function(k){ r[k] = fields[k]; });
+  state[coll] = normItems(coll, state[coll].filter(function(x){ return x.id !== id; }).concat([r]));
+  queueItem({op:"update", coll:coll, id:id, fields:fields});
+}
+function dropItem(coll, id){
+  state[coll] = state[coll].filter(function(r){ return r.id !== id; });
+  queueItem({op:"remove", coll:coll, id:id});
+}
+function queueItem(w){
+  itemsPending.push(JSON.parse(JSON.stringify(w)));
+  cacheLocal();
+  flushItems();
+}
+function flushItems(){
   if(!store) return;                    // stays pending until a store is ready
-  var list = resumesPending; resumesPending = [];
-  list.forEach(function(r){ store.putResume(JSON.parse(JSON.stringify(r))).catch(writeFailed); });
+  var list = itemsPending; itemsPending = [];
+  list.forEach(function(w){
+    var whole = itemById(w.coll, w.id);
+    (w.op === "put" ? store.putItem(w.coll, w.item)
+      : w.op === "update" ? store.updateItem(w.coll, w.id, w.fields, whole && JSON.parse(JSON.stringify(whole)))
+      : store.removeItem(w.coll, w.id)).catch(writeFailed);
+  });
+}
+/* A snapshot can come before a write made here is sent: keep the write. */
+function withPending(coll, list){
+  itemsPending.forEach(function(w){
+    if(w.coll !== coll) return;
+    list = list.filter(function(r){ return r.id !== w.id || w.op === "update"; });
+    if(w.op === "put") list.push(w.item);
+    if(w.op === "update") list.forEach(function(r){
+      if(r.id === w.id) Object.keys(w.fields).forEach(function(k){ r[k] = w.fields[k]; });
+    });
+  });
+  return list;
 }
 function writeFailed(e){
   var code = e && e.code;
@@ -614,13 +657,12 @@ function writeFailed(e){
 /* Every store has the same shape, so nothing outside this section knows
    where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost, onProfile, onResumes)
-                              deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache), the
-                              profile the same way, as onProfile(profile or
-                              null, fromCache), and the resume versions as
-                              onResumes(versions, fromCache); call
-                              onLost(err) if the connection drops for good
+     start(on)                deliver the whole job list now and after every
+                              change, as on.jobs(jobs, fromCache), the
+                              profile the same way, as on.profile(profile or
+                              null, fromCache), and each item collection as
+                              on.items(coll, items, fromCache); call
+                              on.lost(err) if the connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
@@ -628,12 +670,17 @@ function writeFailed(e){
      updateProfile(fields, profile)
                               merge some fields into the profile; `profile`
                               is the whole profile, for creating it       -> Promise
-     putResume(version)       create one resume version                   -> Promise
+     putItem(coll, item)      create or replace one item of a collection
+                              in ITEMS (resumes, documents, guides)       -> Promise
+     updateItem(coll, id, fields, item)
+                              merge some fields into one item; `item` is
+                              the whole item, for creating it             -> Promise
+     removeItem(coll, id)     delete one item                             -> Promise
    A hosted backend later is one more function returning this shape. */
 
 /* The artifact's shared database (the claude.ai "db" capability). The jobs
    are the `jobs` collection; the profile is the one document `profile/me`;
-   resume versions are the `resumes` collection, one document each. */
+   each collection in ITEMS is a collection of the same name. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
@@ -665,28 +712,29 @@ function artifactStore(db){
 
   return {
     kind: "live",
-    start: function(onJobs, onLost, onProfile, onResumes){
-      profileRef().onSnapshot(function(snap){
-        onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
-          snap.metadata.fromCache);
-      }, onLost);
-      db.collection("resumes").limit(1000).onSnapshot(function(snap){
-        onResumes(snap.docs.map(function(d){
+    start: function(on){
+      function rows(snap){
+        return snap.docs.map(function(d){
           var o = JSON.parse(JSON.stringify(d.data() || {}));
           o.id = d.id;
           return o;
-        }), snap.metadata.fromCache);
-      }, onLost);
+        });
+      }
+      profileRef().onSnapshot(function(snap){
+        on.profile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
+          snap.metadata.fromCache);
+      }, on.lost);
+      Object.keys(ITEMS).forEach(function(coll){
+        db.collection(coll).limit(1000).onSnapshot(function(snap){
+          on.items(coll, rows(snap), snap.metadata.fromCache);
+        }, on.lost);
+      });
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
       }).then(function(){
         db.collection("jobs").limit(1000).onSnapshot(function(snap){
-          onJobs(snap.docs.map(function(d){
-            var o = JSON.parse(JSON.stringify(d.data() || {}));
-            o.id = d.id;
-            return o;
-          }), snap.metadata.fromCache);
-        }, onLost);
+          on.jobs(rows(snap), snap.metadata.fromCache);
+        }, on.lost);
       });
     },
     update: function(id, fields, job){
@@ -705,7 +753,16 @@ function artifactStore(db){
         throw e;
       });
     },
-    putResume: function(r){ return retry(function(){ return db.doc("resumes/" + r.id).set(r); }); }
+    putItem: function(coll, item){ return retry(function(){ return db.doc(coll + "/" + item.id).set(item); }); },
+    updateItem: function(coll, id, fields, item){
+      return retry(function(){ return db.doc(coll + "/" + id).update(fields); }).catch(function(e){
+        if(e && e.code === "invalid_argument" && item){         // not there yet
+          return retry(function(){ return db.doc(coll + "/" + id).set(item); });
+        }
+        throw e;
+      });
+    },
+    removeItem: function(coll, id){ return retry(function(){ return db.doc(coll + "/" + id).delete(); }); }
   };
 }
 
@@ -714,26 +771,27 @@ function artifactStore(db){
 function browserStore(){
   function done(){ return Promise.resolve(); }
   return {kind:"local", start:function(){}, update:done, put:done, remove:done,
-    updateProfile:done, putResume:done};
+    updateProfile:done, putItem:done, updateItem:done, removeItem:done};
 }
 
-/* Fictional jobs, profile and resume versions for trying the page outside claude.ai. Edits
+/* Fictional jobs, profile and items for trying the page outside claude.ai. Edits
    stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost, onProfile, onResumes){
+    start: function(on){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).then(function(data){
-        onProfile((data && data.profile) || null, false);
-        onResumes((data && data.resumes) || [], false);
-        onJobs((data && data.jobs) || [], false);
-      }, onLost);
+        on.profile((data && data.profile) || null, false);
+        Object.keys(ITEMS).forEach(function(coll){ on.items(coll, (data && data[coll]) || [], false); });
+        on.jobs((data && data.jobs) || [], false);
+      }, on.lost);
     },
-    update: done, put: done, remove: done, updateProfile: done, putResume: done
+    update: done, put: done, remove: done, updateProfile: done,
+    putItem: done, updateItem: done, removeItem: done
   };
 }
 
@@ -755,55 +813,57 @@ function connect(){
 function useStore(s){
   store = s;
   if(s.kind === "local") setSync("local");
-  s.start(function(jobs, fromCache){
-    if(store !== s) return;               // replaced since, e.g. connection lost
-    if(!jobs.length && fromCache && state.jobs.length) return;
-    jobs.forEach(function(o){
-      var p = pending[o.id];
-      if(p) Object.keys(p).forEach(function(k){ o[k] = p[k]; });
-    });
-    state.jobs = normalize({jobs: jobs}).jobs;
-    setSync(s.kind);
-    cacheLocal();
-    refresh();
-    if(Object.keys(pending).length) flush();
-  }, function(){
-    if(store !== s) return;
-    if(s.kind === "demo"){
-      setSync("demo");
-      document.getElementById("empty").textContent =
-        "The sample data did not load. Serve the public folder over HTTP (see the README) instead of opening the file directly.";
+  s.start({
+    jobs: function(jobs, fromCache){
+      if(store !== s) return;               // replaced since, e.g. connection lost
+      if(!jobs.length && fromCache && state.jobs.length) return;
+      jobs.forEach(function(o){
+        var p = pending[o.id];
+        if(p) Object.keys(p).forEach(function(k){ o[k] = p[k]; });
+      });
+      state.jobs = normalize({jobs: jobs}).jobs;
+      setSync(s.kind);
+      cacheLocal();
       refresh();
-      return;
-    }
-    useStore(browserStore());
-    toast("Lost connection to your saved jobs. Reload to reconnect.", true);
-  }, function(p, fromCache){
-    if(store !== s) return;
-    p = normProfile(p);
-    if(!p && fromCache && state.profile) return;
-    if(profilePending){
-      p = p || {};
-      Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+      if(Object.keys(pending).length) flush();
+    },
+    lost: function(){
+      if(store !== s) return;
+      if(s.kind === "demo"){
+        setSync("demo");
+        document.getElementById("empty").textContent =
+          "The sample data did not load. Serve the public folder over HTTP (see the README) instead of opening the file directly.";
+        refresh();
+        return;
+      }
+      useStore(browserStore());
+      toast("Lost connection to your saved jobs. Reload to reconnect.", true);
+    },
+    profile: function(p, fromCache){
+      if(store !== s) return;
       p = normProfile(p);
+      if(!p && fromCache && state.profile) return;
+      if(profilePending){
+        p = p || {};
+        Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+        p = normProfile(p);
+      }
+      state.profile = p;
+      cacheLocal();
+      renderProfileButton();
+      if(!fromCache) offerOnboarding();
+      flushProfile();
+    },
+    items: function(coll, list, fromCache){
+      if(store !== s || !ITEMS[coll]) return;
+      if(!list.length && fromCache && state[coll].length) return;
+      var before = {};
+      state[coll].forEach(function(r){ before[r.id] = 1; });
+      state[coll] = normItems(coll, withPending(coll, list));
+      cacheLocal();
+      itemsChanged(coll, before);
+      flushItems();
     }
-    state.profile = p;
-    cacheLocal();
-    renderProfileButton();
-    if(!fromCache) offerOnboarding();
-    flushProfile();
-  }, function(list, fromCache){
-    if(store !== s) return;
-    if(!list.length && fromCache && state.resumes.length) return;
-    var have = {};
-    list.forEach(function(r){ have[r.id] = 1; });
-    resumesPending.forEach(function(r){ if(!have[r.id]) list.push(r); });   // not confirmed yet
-    var before = {};
-    state.resumes.forEach(function(r){ before[r.id] = 1; });
-    state.resumes = normResumes(list);
-    cacheLocal();
-    resumesChanged(before);
-    flushResumes();
   });
 }
 function uid(co){
@@ -1396,7 +1456,7 @@ function offer(filename, data, okMsg){
 }
 function saveState(){
   var payload = JSON.stringify({version:3, exported:today(), profile:state.profile,
-    resumes:state.resumes, jobs:state.jobs}, null, 2);
+    resumes:state.resumes, documents:state.documents, guides:state.guides, jobs:state.jobs}, null, 2);
   offer("application-desk-backup-" + today() + ".json", payload, "Backup exported");
 }
 function loadFile(file){
@@ -1417,12 +1477,18 @@ function loadFile(file){
       // Versions never change, so only ones not here yet are added.
       var known = {};
       state.resumes.forEach(function(r){ known[r.id] = 1; });
-      var versions = normResumes(parsed.resumes).filter(function(r){ return !known[r.id]; });
-      versions.forEach(saveResume);
+      var versions = normItems("resumes", parsed.resumes).filter(function(r){ return !known[r.id]; });
+      versions.forEach(function(r){ saveItem("resumes", r); });
+      // Documents and guides change in place: a matching id is replaced, like a job.
+      var others = 0;
+      ["documents","guides"].forEach(function(coll){
+        normItems(coll, parsed[coll]).forEach(function(r){ saveItem(coll, r); others++; });
+      });
       ui.sel = null; renderAll();
       var parts = [incoming.length + " postings"];
       if(withProfile) parts.push("the profile");
       if(versions.length) parts.push(versions.length + " resume version" + (versions.length > 1 ? "s" : ""));
+      if(others) parts.push(others + " document" + (others > 1 ? "s" : "") + " and guide" + (others > 1 ? "s" : ""));
       var last = parts.pop();
       toast("Imported " + (parts.length ? parts.join(", ") + " and " : "") + last);
     }catch(e){
@@ -1920,6 +1986,10 @@ function resumeChoices(){
   }
   return list;
 }
+/* A collection changed in the store. */
+function itemsChanged(coll, before){
+  if(coll === "resumes") resumesChanged(before);
+}
 /* New versions arrived: show the newest unless the text there is being edited. */
 function resumesChanged(before){
   if(!gs || gs.step !== "versions" || gs.vtext !== null) return;
@@ -2131,7 +2201,7 @@ function renderVersions(body, foot, title, stepEl){
   save.addEventListener("click", function(){
     var r = {id:uid("r"), created:new Date().toISOString(), label:"Edited", job:v.job, base:v.id,
       by:"user", text:box.value.trim(), notes:""};
-    saveResume(r);
+    saveItem("resumes", r);
     gs.sel = r.id; gs.vtext = null;
     renderGetStarted();
     toast("Saved as a new version");
