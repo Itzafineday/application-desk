@@ -427,6 +427,8 @@ var FIELDS = ["company","title","band","location","url","source","posted","appli
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
 var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
+/* Resume versions: one document each, never changed once saved. */
+var RESUME_TEXT = ["id","created","label","job","text","notes","by","base"];
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -436,10 +438,12 @@ var DEMO = !(window.claude && window.claude.use);
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var profilePending = null; // profile fields changed here and not yet written
+var resumesPending = [];   // resume versions made here and not yet written
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
 state.profile = DEMO ? null : readCachedProfile();   // null until there is one
+state.resumes = DEMO ? [] : readCachedResumes();     // oldest first
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -455,6 +459,22 @@ function readCachedProfile(){
     var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     return p ? normProfile(p.profile) : null;
   }catch(e){ return null; }
+}
+function readCachedResumes(){
+  try{
+    var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    return normResumes(p && p.resumes);
+  }catch(e){ return []; }
+}
+/* Resume versions with their text fields as strings, oldest first. */
+function normResumes(list){
+  return (Array.isArray(list) ? list : []).filter(function(r){
+    return r && typeof r === "object" && r.id;
+  }).map(function(r){
+    var o = JSON.parse(JSON.stringify(r));
+    RESUME_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    return o;
+  }).sort(function(a, b){ return a.created < b.created ? -1 : a.created > b.created ? 1 : 0; });
 }
 /* A profile document, with its text fields as strings, or null for none. */
 function normProfile(p){
@@ -500,7 +520,7 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile})); }catch(e){}
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile, resumes:state.resumes})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -559,6 +579,18 @@ function flushProfile(){
   var f = profilePending; profilePending = null;
   store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
 }
+/* Add one resume version. Versions are never changed, so this is a create. */
+function saveResume(r){
+  state.resumes = normResumes(state.resumes.concat([r]));
+  resumesPending.push(r);
+  cacheLocal();
+  flushResumes();
+}
+function flushResumes(){
+  if(!store) return;                    // stays pending until a store is ready
+  var list = resumesPending; resumesPending = [];
+  list.forEach(function(r){ store.putResume(JSON.parse(JSON.stringify(r))).catch(writeFailed); });
+}
 function writeFailed(e){
   var code = e && e.code;
   if(code === "quota_exceeded") toast("The job list is full. Delete some closed postings, then try again.", true);
@@ -570,12 +602,13 @@ function writeFailed(e){
 /* Every store has the same shape, so nothing outside this section knows
    where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost, onProfile)
+     start(onJobs, onLost, onProfile, onResumes)
                               deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache), and the
+                              change, as onJobs(jobs, fromCache), the
                               profile the same way, as onProfile(profile or
-                              null, fromCache); call onLost(err) if the
-                              connection drops for good
+                              null, fromCache), and the resume versions as
+                              onResumes(versions, fromCache); call
+                              onLost(err) if the connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
@@ -583,10 +616,12 @@ function writeFailed(e){
      updateProfile(fields, profile)
                               merge some fields into the profile; `profile`
                               is the whole profile, for creating it       -> Promise
+     putResume(version)       create one resume version                   -> Promise
    A hosted backend later is one more function returning this shape. */
 
 /* The artifact's shared database (the claude.ai "db" capability). The jobs
-   are the `jobs` collection; the profile is the one document `profile/me`. */
+   are the `jobs` collection; the profile is the one document `profile/me`;
+   resume versions are the `resumes` collection, one document each. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
@@ -618,10 +653,17 @@ function artifactStore(db){
 
   return {
     kind: "live",
-    start: function(onJobs, onLost, onProfile){
+    start: function(onJobs, onLost, onProfile, onResumes){
       profileRef().onSnapshot(function(snap){
         onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
           snap.metadata.fromCache);
+      }, onLost);
+      db.collection("resumes").limit(1000).onSnapshot(function(snap){
+        onResumes(snap.docs.map(function(d){
+          var o = JSON.parse(JSON.stringify(d.data() || {}));
+          o.id = d.id;
+          return o;
+        }), snap.metadata.fromCache);
       }, onLost);
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
@@ -650,7 +692,8 @@ function artifactStore(db){
         }
         throw e;
       });
-    }
+    },
+    putResume: function(r){ return retry(function(){ return db.doc("resumes/" + r.id).set(r); }); }
   };
 }
 
@@ -658,25 +701,27 @@ function artifactStore(db){
    which cacheLocal() keeps current, so a write has nothing left to do. */
 function browserStore(){
   function done(){ return Promise.resolve(); }
-  return {kind:"local", start:function(){}, update:done, put:done, remove:done, updateProfile:done};
+  return {kind:"local", start:function(){}, update:done, put:done, remove:done,
+    updateProfile:done, putResume:done};
 }
 
-/* Fictional jobs and profile for trying the page outside claude.ai. Edits
+/* Fictional jobs, profile and resume versions for trying the page outside claude.ai. Edits
    stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost, onProfile){
+    start: function(onJobs, onLost, onProfile, onResumes){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).then(function(data){
         onProfile((data && data.profile) || null, false);
+        onResumes((data && data.resumes) || [], false);
         onJobs((data && data.jobs) || [], false);
       }, onLost);
     },
-    update: done, put: done, remove: done, updateProfile: done
+    update: done, put: done, remove: done, updateProfile: done, putResume: done
   };
 }
 
@@ -735,6 +780,15 @@ function useStore(s){
     renderProfileButton();
     if(!fromCache) offerOnboarding();
     flushProfile();
+  }, function(list, fromCache){
+    if(store !== s) return;
+    if(!list.length && fromCache && state.resumes.length) return;
+    var have = {};
+    list.forEach(function(r){ have[r.id] = 1; });
+    resumesPending.forEach(function(r){ if(!have[r.id]) list.push(r); });   // not confirmed yet
+    state.resumes = normResumes(list);
+    cacheLocal();
+    flushResumes();
   });
 }
 function uid(co){
@@ -1245,7 +1299,8 @@ function offer(filename, data, okMsg){
   toast("Saving files is not available in this view", true);
 }
 function saveState(){
-  var payload = JSON.stringify({version:3, exported:today(), profile:state.profile, jobs:state.jobs}, null, 2);
+  var payload = JSON.stringify({version:3, exported:today(), profile:state.profile,
+    resumes:state.resumes, jobs:state.jobs}, null, 2);
   offer("application-desk-backup-" + today() + ".json", payload, "Backup exported");
 }
 function loadFile(file){
@@ -1263,8 +1318,17 @@ function loadFile(file){
       });
       var withProfile = profileHasText(parsed.profile);
       if(withProfile) saveProfile(normProfile(parsed.profile));
+      // Versions never change, so only ones not here yet are added.
+      var known = {};
+      state.resumes.forEach(function(r){ known[r.id] = 1; });
+      var versions = normResumes(parsed.resumes).filter(function(r){ return !known[r.id]; });
+      versions.forEach(saveResume);
       ui.sel = null; renderAll();
-      toast("Imported " + incoming.length + " postings" + (withProfile ? " and the profile" : ""));
+      var parts = [incoming.length + " postings"];
+      if(withProfile) parts.push("the profile");
+      if(versions.length) parts.push(versions.length + " resume version" + (versions.length > 1 ? "s" : ""));
+      var last = parts.pop();
+      toast("Imported " + (parts.length ? parts.join(", ") + " and " : "") + last);
     }catch(e){
       toast("That file is not a Seed Change backup", true);
     }
