@@ -312,6 +312,20 @@ textarea.note{min-height:110px;font-size:13px}
 .gs .notes b{display:block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
 .gs .rowbtns{align-items:center}
 .gs .ask{margin-top:18px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.gs .gtabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.gs .dlist{display:flex;flex-direction:column;gap:6px;margin:0 0 6px}
+.gs .drow{
+  display:flex;align-items:center;gap:10px;text-align:left;width:100%;
+  background:var(--surface-2);border:1px solid var(--line-soft);border-radius:var(--radius);padding:8px 11px;
+}
+.gs .drow:hover{border-color:var(--accent-line)}
+.gs .drow .t{flex:1;font-weight:500;font-size:13px}
+.gs .tag{
+  font-family:"IBM Plex Mono",monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+  padding:1px 6px;border-radius:3px;background:var(--surface-3);color:var(--muted);white-space:nowrap;
+}
+.gs .two{display:grid;grid-template-columns:180px 1fr;gap:0 12px}
+@media (max-width:600px){ .gs .two{grid-template-columns:1fr} }
 
 /* ---------- toast ---------- */
 .toast{
@@ -412,6 +426,7 @@ textarea.note{min-height:110px;font-size:13px}
 <div class="scrim" id="gsScrim" hidden>
   <div class="modal gs" role="dialog" aria-modal="true" aria-labelledby="gsTitle">
     <header><h2 id="gsTitle">Get started</h2><span class="hint" id="gsStep"></span></header>
+    <div class="gtabs" id="gsTabs" role="tablist" hidden></div>
     <div class="body" id="gsBody"></div>
     <div class="foot" id="gsFoot"></div>
   </div>
@@ -438,7 +453,7 @@ var FIELDS = ["company","title","band","location","url","source","posted","appli
   "fit","notes","posting","letter","questions","qSeen","created","form"];
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
-var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
+var PROFILE_TEXT = ["name","headline","skills","experience","resume","voice","more"];
 /* The collections beside the jobs, one document per item: resume versions
    (never changed once saved), documents (letters, references, writing) and
    guides (progress through the LinkedIn, Indeed and interview steps). Text
@@ -851,6 +866,7 @@ function useStore(s){
       state.profile = p;
       cacheLocal();
       renderProfileButton();
+      profileChanged();
       if(!fromCache) offerOnboarding();
       flushProfile();
     },
@@ -1352,7 +1368,8 @@ var RESUME_METRICS = [
   {size:10,   lead:13,   gap:6, head:12, margin:48, name:19},
   {size:9.5,  lead:12.2, gap:5, head:11, margin:44, name:18}
 ];
-function layoutResume(doc, blocks, m){
+/* titles: also set bold the first line of each block (a references sheet's names). */
+function layoutResume(doc, blocks, m, titles){
   var W = 612 - m.margin*2, y = m.margin, ops = [];
   function wrap(s, x, w, style){
     doc.setFont("helvetica", style || "normal").setFontSize(m.size);
@@ -1379,7 +1396,7 @@ function layoutResume(doc, blocks, m){
     } else if(b.t === "line"){
       // A role's title: first after a heading or gap, with a line and then bullets under it.
       var prev = blocks[i-1], role = prev && (prev.t === "heading" || prev.t === "gap")
-        && next && next.t === "line" && blocks[i+2] && blocks[i+2].t === "bullet";
+        && next && next.t === "line" && (titles || (blocks[i+2] && blocks[i+2].t === "bullet"));
       var at = ops.length;
       wrap(b.s, m.margin, W, role ? "bold" : "normal");
       if(role) ops[at].keep = true;
@@ -1387,7 +1404,7 @@ function layoutResume(doc, blocks, m){
   });
   return {ops:ops, height:y, margin:m.margin};
 }
-function makeResumePdf(text, name){
+function makeResumePdf(text, name, what){
   var blocks = resumeBlocks(text);
   if(!blocks.length){ toast("Nothing to export", true); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){
@@ -1395,10 +1412,10 @@ function makeResumePdf(text, name){
   }
   var doc = new window.jspdf.jsPDF({unit:"pt", format:"letter"}), laid = null;
   for(var i=0;i<RESUME_METRICS.length;i++){
-    laid = layoutResume(doc, blocks, RESUME_METRICS[i]);
+    laid = layoutResume(doc, blocks, RESUME_METRICS[i], what === "References");
     if(laid.height <= 792 - laid.margin) break;                 // fits one page
   }
-  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0]);
+  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0], what === "References");
 
   var pageBottom = 792 - laid.margin, offsetY = 0;
   laid.ops.forEach(function(op){
@@ -1419,7 +1436,7 @@ function makeResumePdf(text, name){
   doc.setTextColor(0);
   var who = nameCase(String(blocks[0].s)).replace(/[^A-Za-z0-9]+/g, "");
   var slug = String(name || "").replace(/[^A-Za-z0-9]+/g, "");
-  offer((who ? who + "_" : "") + "Resume" + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
+  offer((who ? who + "_" : "") + (what || "Resume") + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
         "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
 }
 
@@ -1962,7 +1979,9 @@ function offerOnboarding(){
 function openGetStarted(){
   var p = state.profile || {};
   gs = {step: state.profile ? "profile" : "resume", text:"", parsedFrom:null, note:"", noSections:false,
-    f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||""}};
+    vtext:null, ddirty:false, doc:null, dnew:{kind:"letter", title:"", text:"", file:"", note:""},
+    f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||"",
+        voice:p.voice||"", more:p.more||""}};
   document.getElementById("gsScrim").hidden = false;
   renderGetStarted();
 }
@@ -1989,6 +2008,12 @@ function resumeChoices(){
 /* A collection changed in the store. */
 function itemsChanged(coll, before){
   if(coll === "resumes") resumesChanged(before);
+  else if(gs && !editing() && ((coll === "documents" && gs.step === "documents")
+    || (coll === "guides" && (gs.step === "guides" || gs.step === "guide")))) renderGetStarted();
+}
+/* The profile changed in the store: refresh a tab that shows part of it. */
+function profileChanged(){
+  if(gs && !editing() && (gs.step === "documents" || gs.step === "guide")) renderGetStarted();
 }
 /* New versions arrived: show the newest unless the text there is being edited. */
 function resumesChanged(before){
@@ -2003,8 +2028,9 @@ function resumesChanged(before){
 /* Unsaved edits in the versions step survive the first attempt to leave
    them (switch version, go back, close): a second one drops them. Dialogs
    like confirm() may be blocked in the artifact's frame, so none are used. */
+function editing(){ return !!gs && (gs.vtext !== null || gs.ddirty); }
 function dropEdits(){
-  if(!gs || gs.vtext === null || gs.warned){ if(gs) gs.warned = false; return true; }
+  if(!gs || !editing() || gs.warned){ if(gs){ gs.warned = false; gs.vtext = null; gs.ddirty = false; } return true; }
   gs.warned = true;
   toast("Unsaved edits. Save them as a new version, or do that again to drop them.", true);
   return false;
@@ -2035,11 +2061,25 @@ function gsNote(msg){
   if(el) el.textContent = msg;
 }
 
+/* Once there is a profile, the dialog's parts are tabs: Profile, Resumes,
+   Documents, Guides. The first-run steps (resume, done) show none. */
+var GS_TABS = [["profile","Profile"],["versions","Resumes"],["documents","Documents"],["guides","Guides"]];
+function renderGsTabs(){
+  var el = document.getElementById("gsTabs");
+  var at = gs.step === "guide" ? "guides" : gs.step;
+  var show = !!state.profile && GS_TABS.some(function(t){ return t[0] === at; });
+  el.hidden = !show;
+  if(!show) return;
+  el.innerHTML = GS_TABS.map(function(t){
+    return '<button class="tab" role="tab" data-gstab="' + t[0] + '" aria-selected="' + (t[0] === at) + '">' + t[1] + '</button>';
+  }).join("");
+}
 function renderGetStarted(){
   var had = !!state.profile;
   var body = document.getElementById("gsBody"), foot = document.getElementById("gsFoot");
   var title = document.getElementById("gsTitle"), stepEl = document.getElementById("gsStep");
   body.classList.remove("drop");
+  renderGsTabs();
 
   if(gs.step === "resume"){
     title.textContent = had ? "Replace from a resume" : "Get started";
@@ -2090,13 +2130,16 @@ function renderGetStarted(){
       + '<label for="gsName">Name</label><input class="field" id="gsName" autocomplete="off">'
       + '<label for="gsHeadline">Headline</label><input class="field" id="gsHeadline" autocomplete="off" placeholder="The kind of work you do or want, in one line">'
       + '<label for="gsSkills">Skills</label><textarea class="field prose" id="gsSkills"></textarea>'
-      + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>';
-    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost" id="gsReplace">Replace from a resume</button>'
-        + '<button class="btn ghost left" id="gsVersions">Resume versions</button>' : '')
+      + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>'
+      + '<label for="gsVoice">How you write</label><textarea class="field prose" id="gsVoice"'
+      + ' placeholder="Claude fills this in from your past letters (Documents). Edit it freely."></textarea>'
+      + '<label for="gsMore">More about you</label><textarea class="field prose" id="gsMore"'
+      + ' placeholder="Anything else Claude should know: what you want next, what you do best, what to avoid."></textarea>';
+    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost left" id="gsReplace">Replace from a resume</button>' : '')
       + (gs.parsedFrom || !had ? '<button class="btn" id="gsBack">Back</button>' : '')
       + '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
       + '<button class="btn primary" id="gsSave">Save profile</button>';
-    var map = {name:"gsName", headline:"gsHeadline", skills:"gsSkills", experience:"gsExp"};
+    var map = {name:"gsName", headline:"gsHeadline", skills:"gsSkills", experience:"gsExp", voice:"gsVoice", more:"gsMore"};
     Object.keys(map).forEach(function(k){
       var el = document.getElementById(map[k]);
       el.value = gs.f[k];
@@ -2104,8 +2147,6 @@ function renderGetStarted(){
     });
     var rp = document.getElementById("gsReplace");
     if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
-    var vs = document.getElementById("gsVersions");
-    if(vs) vs.addEventListener("click", function(){ openResumeVersions(""); });
     var bk = document.getElementById("gsBack");
     if(bk) bk.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
     document.getElementById("gsSave").addEventListener("click", saveGetStarted);
@@ -2118,7 +2159,9 @@ function renderGetStarted(){
     body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
       + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
       + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
-      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resume versions</b>.</li>'
+      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resumes</b>.</li>'
+      + '<li>Add past cover letters and references under <b>Documents</b>, so letters sound like you.</li>'
+      + '<li>Work through your LinkedIn and Indeed profiles, or a practice interview, under <b>Guides</b>.</li>'
       + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
     foot.innerHTML = '<button class="btn" id="gsVersions">Resume versions</button>'
       + '<button class="btn primary" id="gsDone">Done</button>';
@@ -2128,6 +2171,7 @@ function renderGetStarted(){
   }
 
   else if(gs.step === "versions") renderVersions(body, foot, title, stepEl);
+  else if(gs.step === "documents") renderDocuments(body, foot, title, stepEl);
 
   var skip = document.getElementById("gsSkip");
   if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
@@ -2219,6 +2263,149 @@ function renderVersions(body, foot, title, stepEl){
   });
 }
 
+var DOC_KINDS = {letter:"Cover letter", reference:"References", writing:"Writing sample", other:"Other"};
+function kindOptions(sel){
+  return Object.keys(DOC_KINDS).map(function(k){
+    return '<option value="' + k + '"' + (k === sel ? " selected" : "") + '>' + DOC_KINDS[k] + '</option>';
+  }).join("");
+}
+function renderDocuments(body, foot, title, stepEl){
+  title.textContent = "Documents";
+  stepEl.textContent = "";
+  var d = gs.doc && itemById("documents", gs.doc);
+  if(d){ renderDocument(d, body, foot); return; }
+  gs.doc = null;
+  var jobs = state.jobs.filter(function(j){ return j.status !== "closed"; })
+    .sort(function(a, b){ return a.company.localeCompare(b.company); });
+  var voice = state.profile && state.profile.voice.trim();
+  body.innerHTML = '<p class="lead">Past cover letters, references and other writing. Claude learns how you write'
+    + ' from your letters and writing samples, and keeps your references ready for applications. They are kept in'
+    + ' your own Seed Change and sent nowhere.</p>'
+    + (state.documents.length ? '<div class="dlist">' + state.documents.slice().reverse().map(function(x){
+        return '<button class="drow" data-doc="' + esc(x.id) + '"><span class="tag">' + esc(DOC_KINDS[x.kind] || "Other") + '</span>'
+          + '<span class="t">' + esc(x.title || "Untitled") + '</span><span class="hint">' + esc(x.added.slice(0, 10)) + '</span></button>';
+      }).join("") + '</div>' : '<p class="qempty">No documents yet.</p>')
+    + (voice ? '<div class="notes"><b>How you write (Claude\'s note; edit it under Profile)</b>' + esc(state.profile.voice) + '</div>'
+      : '<p class="qempty">Claude hasn\'t written a note on how you write yet. Add a letter or two, then ask below.</p>')
+    + '<div class="ask"><label>Add a document</label><div class="two">'
+    + '<select class="field" id="gsDKind">' + kindOptions(gs.dnew.kind) + '</select>'
+    + '<input class="field" id="gsDTitle" autocomplete="off" placeholder="Title, e.g. Letter to a library, 2025"></div>'
+    + '<div class="pick" style="margin-top:8px"><button class="btn sm" id="gsDPick">Choose a PDF or Word file</button>'
+    + '<span class="hint" id="gsNote"></span></div>'
+    + '<input type="file" id="gsDFile" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>'
+    + '<textarea class="field prose" id="gsDText" placeholder="…or paste its text here"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsDAdd">Add document</button></div></div>'
+    + '<div class="ask"><label>Ask Claude</label>'
+    + '<div class="rowbtns" style="margin-top:0"><button class="btn sm" id="gsVoiceAsk">Copy request: learn how I write</button></div>'
+    + '<div class="two" style="margin-top:6px"><button class="btn sm" id="gsRefAsk">Copy request: references sheet</button>'
+    + '<select class="field" id="gsRefFor"><option value="">for every job</option>' + jobs.map(function(j){
+        return '<option value="' + esc(j.id) + '">for ' + esc(j.company + " — " + j.title) + '</option>';
+      }).join("") + '</select></div>'
+    + '<p class="hint">Paste the request into your chat with Claude. What it writes appears here.</p></div>';
+  foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+
+  Array.prototype.forEach.call(body.querySelectorAll("[data-doc]"), function(b){
+    b.addEventListener("click", function(){ gs.doc = b.dataset.doc; gs.ddirty = false; renderGetStarted(); });
+  });
+  var kind = document.getElementById("gsDKind"), ttl = document.getElementById("gsDTitle"), txt = document.getElementById("gsDText");
+  ttl.value = gs.dnew.title; txt.value = gs.dnew.text;
+  document.getElementById("gsNote").textContent = gs.dnew.note;
+  kind.addEventListener("change", function(){ gs.dnew.kind = kind.value; });
+  ttl.addEventListener("input", function(){ gs.dnew.title = ttl.value; });
+  txt.addEventListener("input", function(){ gs.dnew.text = txt.value; });
+  document.getElementById("gsDPick").addEventListener("click", function(){ document.getElementById("gsDFile").click(); });
+  document.getElementById("gsDFile").addEventListener("change", function(e){
+    var f = e.target.files && e.target.files[0], flow = gs;
+    e.target.value = "";
+    if(!f) return;
+    gsNote(gs.dnew.note = "Reading " + f.name + "…");
+    fileText(f).then(function(text){
+      if(gs !== flow) return;
+      gs.dnew.text = text; gs.dnew.file = f.name;
+      if(!gs.dnew.title.trim()) gs.dnew.title = f.name.replace(/\.[a-z]+$/i, "").replace(/[_-]+/g, " ");
+      gs.dnew.note = "Read " + f.name + ". Check it, then Add document.";
+      if(gs.step === "documents" && !gs.doc) renderGetStarted();
+    }, function(msg){ if(gs === flow) gsNote(gs.dnew.note = String(msg)); });
+  });
+  document.getElementById("gsDAdd").addEventListener("click", function(){
+    var text = gs.dnew.text.trim();
+    if(!text){ toast("Paste the text or choose a file first", true); return; }
+    var docItem = {id:uid("d"), added:new Date().toISOString(), kind:gs.dnew.kind,
+      title:gs.dnew.title.trim() || DOC_KINDS[gs.dnew.kind], text:text.slice(0, RESUME_MAX), file:gs.dnew.file};
+    saveItem("documents", docItem);
+    gs.dnew = {kind:gs.dnew.kind, title:"", text:"", file:"", note:""};
+    renderGetStarted();
+    toast("Added " + docItem.title + (text.length > RESUME_MAX ? " (the first 60,000 characters)" : ""));
+  });
+  document.getElementById("gsVoiceAsk").addEventListener("click", function(){
+    copy("Please read my cover letters and writing samples in Seed Change (the documents collection) and write"
+      + " a short note on how I write into my profile's voice field: tone, sentence length, words and phrases I use"
+      + " or avoid, how I open and close. Keep it under 150 words and quote nothing private. Follow it when you"
+      + " draft my letters and form answers. Don't change the documents.", "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsRefAsk").addEventListener("click", function(){
+    var j = byId(document.getElementById("gsRefFor").value);
+    copy("Please make a references sheet in Seed Change from my reference documents"
+      + (j ? ", for the " + j.title + " job at " + j.company + "  [" + j.id + "], choosing the references that fit it best"
+        : ", with all my references")
+      + ". Save it as a new document of kind \"reference\" titled \"References sheet" + (j ? " for " + j.company : "") + "\":"
+      + " my name on the first line, my contact line under it, a REFERENCES heading, then for each reference their"
+      + " name, title and organisation, how they know me, and their phone and email. Use only details that are in my"
+      + " documents. Don't change the other documents.", "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+}
+/* One document, open for reading and editing. */
+function renderDocument(d, body, foot){
+  body.innerHTML = '<div class="two"><div><label for="gsEKind">Kind</label><select class="field" id="gsEKind">'
+    + kindOptions(d.kind) + '</select></div><div><label for="gsETitle">Title</label>'
+    + '<input class="field" id="gsETitle" autocomplete="off"></div></div>'
+    + '<p class="meta">' + esc(["added " + d.added.slice(0, 10)].concat(d.file ? ["from " + d.file] : []).join(" · ")) + '</p>'
+    + '<label for="gsEText">Text</label><textarea class="field prose tall" id="gsEText"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsESave" hidden>Save changes</button>'
+    + '<button class="btn sm" id="gsEPdf">Save PDF</button><button class="btn sm" id="gsECopy">Copy text</button>'
+    + '<button class="btn ghost sm" id="gsERemove">Remove</button><span class="hint" id="gsEHint"></span></div>';
+  foot.innerHTML = '<button class="btn ghost left" id="gsEBack">Back to documents</button>'
+    + '<button class="btn primary" id="gsClose">Close</button>';
+  var kind = document.getElementById("gsEKind"), ttl = document.getElementById("gsETitle"), txt = document.getElementById("gsEText");
+  var save = document.getElementById("gsESave"), rm = document.getElementById("gsERemove");
+  ttl.value = d.title; txt.value = d.text;
+  function mark(){
+    gs.ddirty = kind.value !== d.kind || ttl.value !== d.title || txt.value !== d.text;
+    gs.warned = false;
+    save.hidden = !gs.ddirty;
+    document.getElementById("gsEHint").textContent = gs.ddirty ? "edited, not saved" : "";
+  }
+  [kind, ttl, txt].forEach(function(el){ el.addEventListener("input", mark); el.addEventListener("change", mark); });
+  save.addEventListener("click", function(){
+    changeItem("documents", d.id, {kind:kind.value, title:ttl.value.trim() || DOC_KINDS[kind.value], text:txt.value.trim()});
+    gs.ddirty = false;
+    renderGetStarted();
+    toast("Saved");
+  });
+  document.getElementById("gsEPdf").addEventListener("click", function(){
+    if(kind.value === "letter") makePdf({company:ttl.value}, txt.value);
+    else makeResumePdf(txt.value, ttl.value, kind.value === "reference" ? "References" : "Document");
+  });
+  document.getElementById("gsECopy").addEventListener("click", function(){ copy(txt.value, "Copied"); });
+  rm.addEventListener("click", function(){
+    if(gs.removing !== d.id){ gs.removing = d.id; rm.textContent = "Click again to remove"; return; }
+    gs.removing = null; gs.ddirty = false;
+    dropItem("documents", d.id);
+    gs.doc = null;
+    renderGetStarted();
+    toast("Removed " + d.title);
+  });
+  document.getElementById("gsEBack").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    gs.doc = null; renderGetStarted();
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    closeGetStarted(false);
+  });
+}
+
 function saveGetStarted(){
   var fields = {};
   Object.keys(gs.f).forEach(function(k){ fields[k] = gs.f[k].trim(); });
@@ -2233,38 +2420,44 @@ function saveGetStarted(){
   else { closeGetStarted(false); toast("Profile saved"); }
 }
 
-/* Read a picked or dropped file into the resume box. The readers load from
-   cdnjs the first time they are needed, so the page itself stays light. */
-function readResumeFile(file){
+/* The text of a picked or dropped PDF or Word file. Resolves the text, or
+   rejects with a message to show. The readers load from cdnjs the first time
+   they are needed, so the page itself stays light. */
+function fileText(file){
   var name = file.name || "the file";
   var kind = (/\.pdf$/i.test(name) || file.type === "application/pdf") ? "pdf"
     : /\.docx$/i.test(name) ? "docx" : /\.doc$/i.test(name) ? "doc" : "";
-  if(kind === "doc"){ gsNote("Older .doc files can't be read here. Save it as .docx or PDF, or paste the text."); return; }
-  if(!kind){ gsNote("Pick a PDF or a Word (.docx) file, or paste the text."); return; }
-  if(file.size > 10*1024*1024){ gsNote("That file is over 10 MB. Paste the text instead."); return; }
-  gsNote("Reading " + name + "…");
-  var flow = gs, r = new FileReader();
-  r.onload = function(){
-    (kind === "pdf" ? readPdf(r.result) : readDocx(r.result)).then(function(text){
-      if(gs !== flow) return;                       // closed or reopened meanwhile
+  if(kind === "doc") return Promise.reject("Older .doc files can't be read here. Save it as .docx or PDF, or paste the text.");
+  if(!kind) return Promise.reject("Pick a PDF or a Word (.docx) file, or paste the text.");
+  if(file.size > 10*1024*1024) return Promise.reject("That file is over 10 MB. Paste the text instead.");
+  return new Promise(function(res, rej){
+    var r = new FileReader();
+    r.onload = function(){ res(r.result); };
+    r.onerror = function(){ rej("Couldn't open that file. Paste the text instead."); };
+    r.readAsArrayBuffer(file);
+  }).then(function(buf){
+    return (kind === "pdf" ? readPdf(buf) : readDocx(buf)).then(function(text){
       text = text.trim();
-      if(!text){
-        gsNote(kind === "pdf" ? "This PDF has no text to read (it may be a scan). Paste the text instead." : "No text found in that file.");
-        return;
-      }
-      gs.text = text;
-      var box = document.getElementById("gsText");
-      if(box) box.value = text;
-      gsNote("Read " + name + ". Check the text, then Next.");
+      if(!text) throw (kind === "pdf" ? "This PDF has no text to read (it may be a scan). Paste the text instead." : "No text found in that file.");
+      return text;
     }, function(e){
-      if(gs !== flow) return;
-      gsNote(e && e.code === "load" ? "The reader didn't load. Check your connection, or paste the text instead."
+      throw (e && e.code === "load" ? "The reader didn't load. Check your connection, or paste the text instead."
         : e && e.name === "PasswordException" ? "This PDF is password-protected. Paste the text instead."
         : "Couldn't read that file. Paste the text instead.");
     });
-  };
-  r.onerror = function(){ if(gs === flow) gsNote("Couldn't open that file. Paste the text instead."); };
-  r.readAsArrayBuffer(file);
+  });
+}
+/* Read a picked or dropped file into the resume box. */
+function readResumeFile(file){
+  var name = file.name || "the file", flow = gs;
+  gsNote("Reading " + name + "…");
+  fileText(file).then(function(text){
+    if(gs !== flow) return;                         // closed or reopened meanwhile
+    gs.text = text;
+    var box = document.getElementById("gsText");
+    if(box) box.value = text;
+    gsNote("Read " + name + ". Check the text, then Next.");
+  }, function(msg){ if(gs === flow) gsNote(String(msg)); });
 }
 
 var loadedScripts = {};
@@ -2482,6 +2675,12 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   toast("Added " + j.company);
 });
 document.getElementById("btnStart").addEventListener("click", openGetStarted);
+document.getElementById("gsTabs").addEventListener("click", function(e){
+  var t = e.target.closest("[data-gstab]");
+  if(!t || !gs || !dropEdits()) return;
+  if(t.dataset.gstab === "versions") openResumeVersions("");
+  else { gs.step = t.dataset.gstab; gs.doc = null; gs.guide = null; renderGetStarted(); }
+});
 var gsBody = document.getElementById("gsBody");
 gsBody.addEventListener("dragover", function(e){
   if(!gs || gs.step !== "resume") return;
@@ -2496,7 +2695,7 @@ gsBody.addEventListener("drop", function(e){
 });
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
-    if(gs){ if(gs.step !== "versions" || dropEdits()) closeGetStarted(gs.step !== "versions"); return; }
+    if(gs){ if(dropEdits()) closeGetStarted(true); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
   }

@@ -123,6 +123,8 @@ saved: the page treats a missing document as "no profile yet".
 | `skills` | string | Plain text, one group per line. |
 | `experience` | string | Plain text. Each role's lines, with bullets as `- `, and a blank line between roles. |
 | `resume` | string | The whole resume as imported (pasted, or read from a PDF or Word file), up to 60,000 characters, so nothing the fields above leave out is lost. |
+| `voice` | string | How the person writes: tone, sentence length, words used or avoided, openings and closings. Claude writes it from their letters and writing samples (Documents) and follows it in letters and form answers; the owner can edit it. |
+| `more` | string | Anything else Claude should know: what they want next, what they do best, what to avoid. Written by the owner, or added from the practice interview. |
 | `updated` | string | ISO 8601 timestamp of the last save from the page. |
 
 All fields are optional; `normProfile()` reads a missing text field as `""`. The
@@ -170,6 +172,34 @@ does:
 Claude adds a version with ArtifactData `set` on a new id. It never changes or
 deletes a version, and never changes the profile's `resume` while polishing.
 
+## Documents
+
+The owner's own papers: past cover letters, references, writing samples and
+anything else that helps Claude write like them or apply for them. Collection
+`documents`, one document each, document id = item id. The owner adds,
+edits and removes them in the page (Profile → Documents).
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | `"d-"` plus 7 random base-36 characters. |
+| `added` | string | ISO 8601 timestamp. Listed newest first. |
+| `kind` | string | `"letter"` (a past cover letter), `"reference"` (references, contact details included), `"writing"` (a writing sample) or `"other"`. |
+| `title` | string | A name the owner chose, or the file name. |
+| `text` | string | The whole text, up to 60,000 characters, as pasted or read from a PDF or Word file. |
+| `file` | string | The file it was read from, or `""` if pasted. |
+
+- References hold other people's names, phone numbers and emails. They stay
+  in this database and in the owner's backups. Claude uses them only on Seed
+  Change pages the owner asks for (a references sheet, an application form)
+  and never sends them anywhere else.
+- A references sheet is a `reference` document laid out like a resume: the
+  owner's name, their contact line, a `REFERENCES` heading, then each
+  reference as a block of lines starting with the name. Its PDF sets each
+  block's first line in bold.
+- A `letter` saves as a PDF in the cover letter layout; the others in the
+  resume layout.
+- The browser cache keeps documents without their text.
+
 ## Export file
 
 "Export backup" saves, and "Import" reads, this shape:
@@ -180,6 +210,8 @@ deletes a version, and never changes the profile's `resume` while polishing.
   "exported": "2026-10-14",
   "profile": { "name": "", "headline": "", "skills": "", "experience": "", "resume": "" },
   "resumes": [ ],
+  "documents": [ ],
+  "guides": [ ],
   "jobs": [ ]
 }
 ```
@@ -196,6 +228,8 @@ deletes a version, and never changes the profile's `resume` while polishing.
 - `resumes` holds the resume versions (above), oldest first.
   `scripts/pack-backup.js` writes them from a listing of `resumes` when given
   `--resumes`. Exports from before the polisher have none. Import adds the versions not already there, by `id`.
+- `documents` and `guides` hold those collections. Import replaces an item
+  with the same `id` and adds the rest.
 - Import merges jobs by `id`: a job with a matching id is replaced, others are added.
 
 `public/sample-data.json` uses the export shape, with fictional data only.

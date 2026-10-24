@@ -84,6 +84,12 @@ artifact tools). Other agents work on code and sample data only.
   `notes` on what changed and why. Never change or delete a version, and
   never change the profile's `resume`. Keep it truthful: don't invent
   experience; ask in the notes instead.
+- Documents: read the owner's `documents` (letters, references, writing) when
+  drafting for them, and follow the profile's `voice` in letters and answers.
+  Add new documents only when asked (a references sheet); never change or
+  delete theirs. References hold other people's contact details: use them
+  only in Seed Change and on application forms the owner asks you to help
+  with, and never put them anywhere else.
 - Pin every write to the document version you read, so a change made in the
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection
