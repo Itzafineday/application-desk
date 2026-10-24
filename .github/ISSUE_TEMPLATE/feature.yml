@@ -1,0 +1,35 @@
+name: Feature request
+description: An idea that would make Seed Change more useful.
+title: "Idea: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. **This request is public**, so leave out anything personal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The job-hunting task, and what makes it hard today.
+      placeholder: "I apply to the same kind of role a lot and rewrite the same answers each time."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: Your idea, if you have one. Rough is fine.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Filled in when you use Suggest a feature in Seed Change.
+      placeholder: "4.1.0 (claude.ai)"
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I've left out job details, letters, references and anything else personal.
+          required: true
