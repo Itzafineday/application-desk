@@ -31,6 +31,13 @@ page updates live.
   resume** on a job's letter, ask Claude to polish your resume in general or
   for one job. Each result is a new version with Claude's notes on what
   changed, so nothing is lost, and any version saves as a PDF.
+- **Documents and your voice.** Keep past cover letters, references and
+  writing samples in Seed Change (Profile → Documents). Claude learns how you
+  write from them, so letters sound like you, and builds a references sheet
+  for any job.
+- **Guides.** Step by step through your LinkedIn and Indeed profiles, with a
+  draft from Claude for each section to paste in, and a practice interview
+  with feedback on each answer (Profile → Guides). Your progress is kept.
 - **Help me apply.** For company sites with their own long application form,
   paste its questions into the job's Help me apply tab. Ask Claude in chat and
   it drafts an answer to each one from your profile, for you to check and copy
@@ -97,6 +104,10 @@ backups.
   change to the paste parser, the resume reader or the form question splitter
   needs a fixture in `tests/fixtures/`, and fixtures are always invented, never
   a real posting, resume or form.
+- Found a bug or have an idea? Click the version next to the name in the app,
+  or open an issue here. [docs/MAINTAINING.md](docs/MAINTAINING.md) explains
+  how reports become releases, and [docs/UPDATING.md](docs/UPDATING.md) how to
+  update your page without losing anything.
 - Read [AGENTS.md](AGENTS.md) before contributing. It covers the privacy rules,
   the pre-commit hook and the deploy checklist, for people and AI agents alike.
 - [docs/roadmap.md](docs/roadmap.md) has what's done, what's next and the

@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "exported": "2026-10-24",
+  "profile": {
+    "name": "Pat Example",
+    "headline": "Fictional analyst",
+    "skills": "Spreadsheets",
+    "experience": "Analyst\nExample Co, 2020 - present\n- Built a fictional report.",
+    "resume": "PAT EXAMPLE\nFictional analyst",
+    "updated": "2026-10-23T19:00:00.000Z"
+  },
+  "jobs": [
+    {
+      "id": "example-co-0000001",
+      "company": "Example Co 1",
+      "title": "Analyst",
+      "status": "queued",
+      "fit": null,
+      "band": "",
+      "location": "Example City, BC",
+      "url": "https://jobs.example.com/1",
+      "source": "",
+      "posted": "2026-10-01",
+      "applied": null,
+      "notes": "",
+      "posting": "A fictional posting.",
+      "letter": "",
+      "questions": [],
+      "qSeen": null
+    },
+    {
+      "id": "example-co-0000002",
+      "company": "Example Co 2",
+      "title": "Analyst",
+      "status": "queued",
+      "fit": null,
+      "band": "",
+      "location": "Example City, BC",
+      "url": "https://jobs.example.com/2",
+      "source": "",
+      "posted": "2026-10-01",
+      "applied": null,
+      "notes": "",
+      "posting": "A fictional posting.",
+      "letter": "",
+      "questions": [],
+      "qSeen": null,
+      "form": [
+        {
+          "id": "f-aaaaaaa",
+          "ts": "2026-10-24",
+          "text": "Why us? (max 500 characters)",
+          "answer": "A fictional answer."
+        }
+      ]
+    }
+  ]
+}

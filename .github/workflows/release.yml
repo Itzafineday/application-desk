@@ -1,0 +1,63 @@
+# Release: the owner runs this from the Actions tab (Run workflow) with the
+# version in public/index.html. It checks the version and tests, then Claude
+# writes plain-language release notes, creates the release and its tag, and
+# tells everyone whose issue it fixes how to update. See docs/MAINTAINING.md.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 4.1.0 (must match APP_VERSION in public/index.html)"
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the version and run the tests
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          grep -q "var APP_VERSION = \"$VERSION\";" public/index.html \
+            || { echo "APP_VERSION in public/index.html is not $VERSION"; exit 1; }
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then echo "v$VERSION already exists"; exit 1; fi
+          node --test
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Release Seed Change ${{ inputs.version }}.
+            REPO: ${{ github.repository }}
+
+            1. Find the previous release tag (git describe --tags --abbrev=0, or none for the first).
+               Read the commits and merged pull requests since then (git log, gh pr list --state
+               merged, gh pr view).
+            2. Write release notes to release-notes.md for the people who use Seed Change, not for
+               developers: a short "What's new" list in plain words, then "Fixed", then "Your data"
+               (say plainly that updating keeps their data, and describe any migration the release
+               needs), then "How to update", linking
+               https://github.com/${{ github.repository }}/blob/main/docs/UPDATING.md.
+            3. Create the release:
+               gh release create v${{ inputs.version }} --target main --title "Seed Change ${{ inputs.version }}" --notes-file release-notes.md
+            4. For each issue closed by a pull request in this release, comment once: thank the
+               reporter, say it is released in ${{ inputs.version }} with the release's link, and how
+               to update (ask Claude: "Update my Seed Change to the latest release", or see the
+               update guide).
+            Don't change any files in the repository other than release-notes.md, which you don't commit.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Read,Write,Grep,Glob,Bash(git log:*),Bash(git describe:*),Bash(git tag:*),Bash(gh pr list:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh release create:*),Bash(gh release view:*)"

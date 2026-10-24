@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Seed Change doesn't work as it should.
+title: "Bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. **This report is public.** Please leave out your job details,
+        cover letters, resume, references and anything else personal. Describe what happened in
+        general terms ("a pasted LinkedIn page"), not with your real data.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, and what went wrong.
+      placeholder: "I pasted an Indeed search page and clicked Add to queue, but the company came out empty."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to see it again
+      description: As few as it takes. "It happens every time" or "only once" helps too.
+      placeholder: |
+        1. Open Profile, then Documents
+        2. Choose a Word file
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Filled in when you use Report a bug in Seed Change (click the version next to the name).
+      placeholder: "4.1.0 (claude.ai)"
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: "Chrome on Windows, Safari on iPhone..."
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I've left out job details, letters, references and anything else personal.
+          required: true

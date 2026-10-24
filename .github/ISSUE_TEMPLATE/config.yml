@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setting up Seed Change
+    url: https://github.com/Itzafineday/application-desk/blob/main/docs/SETUP.md
+    about: Step-by-step setup, no coding needed.
+  - name: Updating to a new release
+    url: https://github.com/Itzafineday/application-desk/blob/main/docs/UPDATING.md
+    about: How to update without losing anything.

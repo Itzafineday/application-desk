@@ -74,7 +74,9 @@ header{
 .brand .ver{
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
   color:var(--faint);letter-spacing:.08em;text-transform:uppercase;
+  background:none;border:0;padding:2px 3px;border-radius:3px;
 }
+.brand .ver:hover{color:var(--accent);background:var(--surface-2)}
 .stats{display:flex;gap:0;margin-left:auto;flex-wrap:wrap}
 .stat{
   padding:0 14px;border-left:1px solid var(--line-soft);
@@ -312,6 +314,34 @@ textarea.note{min-height:110px;font-size:13px}
 .gs .notes b{display:block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
 .gs .rowbtns{align-items:center}
 .gs .ask{margin-top:18px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.gs .gtabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.gs .dlist{display:flex;flex-direction:column;gap:6px;margin:0 0 6px}
+.gs .drow{
+  display:flex;align-items:center;gap:10px;text-align:left;width:100%;
+  background:var(--surface-2);border:1px solid var(--line-soft);border-radius:var(--radius);padding:8px 11px;
+}
+.gs .drow:hover{border-color:var(--accent-line)}
+.gs .drow .t{flex:1;font-weight:500;font-size:13px}
+.gs .tag{
+  font-family:"IBM Plex Mono",monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+  padding:1px 6px;border-radius:3px;background:var(--surface-3);color:var(--muted);white-space:nowrap;
+}
+.gs .two{display:grid;grid-template-columns:180px 1fr;gap:0 12px}
+.gs .gcard{border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;
+  display:flex;gap:12px;align-items:center}
+.gs .gcard .t{flex:1}
+.gs .gcard .t b{display:block;font-size:13.5px}
+.gs .gcard .t span{font-size:12px;color:var(--muted)}
+.gs .pills{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 12px}
+.gs .pill2{
+  width:26px;height:24px;border-radius:4px;border:1px solid var(--line);background:transparent;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);padding:0;
+}
+.gs .pill2.done{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.gs .pill2.skipped{border-style:dashed;color:var(--faint)}
+.gs .pill2[aria-current="step"]{outline:2px solid var(--accent);outline-offset:1px;color:var(--text)}
+.gs h3.q{font-size:15px;margin:0 0 6px;font-weight:600;line-height:1.4}
+@media (max-width:600px){ .gs .two{grid-template-columns:1fr} }
 
 /* ---------- toast ---------- */
 .toast{
@@ -338,7 +368,7 @@ textarea.note{min-height:110px;font-size:13px}
   <header>
     <div class="brand">
       <h1>Seed Change</h1>
-      <span class="ver">v4</span>
+      <button class="ver" id="btnAbout" title="About Seed Change, and how to send feedback">v4</button>
       <span class="sync" id="sync" data-s="connecting">Connecting…</span>
     </div>
     <div class="stats" id="stats"></div>
@@ -412,8 +442,27 @@ textarea.note{min-height:110px;font-size:13px}
 <div class="scrim" id="gsScrim" hidden>
   <div class="modal gs" role="dialog" aria-modal="true" aria-labelledby="gsTitle">
     <header><h2 id="gsTitle">Get started</h2><span class="hint" id="gsStep"></span></header>
+    <div class="gtabs" id="gsTabs" role="tablist" hidden></div>
     <div class="body" id="gsBody"></div>
     <div class="foot" id="gsFoot"></div>
+  </div>
+</div>
+
+<div class="scrim" id="aboutScrim" hidden>
+  <div class="modal gs" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" style="width:min(520px,100%)">
+    <header><h2 id="aboutTitle">Seed Change</h2><span class="hint" id="aboutVer"></span></header>
+    <div class="body">
+      <p class="lead">Found a bug, or have an idea? Tell us on GitHub. Reports are public, so leave out your job
+        details, letters, references and anything else personal.</p>
+      <div class="rowbtns">
+        <a class="btn primary sm" id="aboutBug" target="_blank" rel="noopener">Report a bug ↗</a>
+        <a class="btn sm" id="aboutIdea" target="_blank" rel="noopener">Suggest a feature ↗</a>
+        <a class="btn ghost sm" id="aboutNew" target="_blank" rel="noopener">What's new ↗</a>
+      </div>
+      <p class="hint">To update, ask Claude: “Update my Seed Change to the latest release.” It backs up your
+        data first and keeps the same link, so everything you have stays where it is.</p>
+    </div>
+    <div class="foot"><button class="btn primary" id="aboutClose">Close</button></div>
   </div>
 </div>
 
@@ -432,15 +481,26 @@ textarea.note{min-height:110px;font-size:13px}
 var V2_KEY = "appdesk.v2";
 var CACHE_KEY = "appdesk.v3.cache";
 var MIGRATED_KEY = "appdesk.v3.migrated";   // gitleaks:allow (a storage key name, not a secret)
+/* The release this page is. Bump it with each release (docs/MAINTAINING.md):
+   feedback links carry it, so a report says which version it is about. */
+var APP_VERSION = "4.1.0";
+var REPO_URL = "https://github.com/Itzafineday/application-desk";
 var STATUSES = ["queued","working","applied","interview","offer","closed"];
 var STATUS_ORDER = {interview:0,offer:1,working:2,applied:3,queued:4,closed:5};
 var FIELDS = ["company","title","band","location","url","source","posted","applied","status",
   "fit","notes","posting","letter","questions","qSeen","created","form"];
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
-var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
-/* Resume versions: one document each, never changed once saved. */
-var RESUME_TEXT = ["id","created","label","job","text","notes","by","base"];
+var PROFILE_TEXT = ["name","headline","skills","experience","resume","voice","more"];
+/* The collections beside the jobs, one document per item: resume versions
+   (never changed once saved), documents (letters, references, writing) and
+   guides (progress through the LinkedIn, Indeed and interview steps). Text
+   fields are kept as strings, maps as objects, and lists sort by `order`. */
+var ITEMS = {
+  resumes:   {text:["id","created","label","job","text","notes","by","base"], order:"created"},
+  documents: {text:["id","added","kind","title","text","file"], order:"added"},
+  guides:    {text:["id","created","updated","summary"], maps:["status","answers","drafts"], order:"id"}
+};
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -450,12 +510,12 @@ var DEMO = !(window.claude && window.claude.use);
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var profilePending = null; // profile fields changed here and not yet written
-var resumesPending = [];   // resume versions made here and not yet written
+var itemsPending = [];     // item writes made here and not yet sent: {op, coll, id, item, fields}
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
 state.profile = DEMO ? null : readCachedProfile();   // null until there is one
-state.resumes = DEMO ? [] : readCachedResumes();     // oldest first
+Object.keys(ITEMS).forEach(function(c){ state[c] = DEMO ? [] : readCachedItems(c); });
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -472,21 +532,35 @@ function readCachedProfile(){
     return p ? normProfile(p.profile) : null;
   }catch(e){ return null; }
 }
-function readCachedResumes(){
+function readCachedItems(coll){
   try{
     var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    return normResumes(p && p.resumes);
+    return normItems(coll, p && p[coll]);
   }catch(e){ return []; }
 }
-/* Resume versions with their text fields as strings, oldest first. */
-function normResumes(list){
+/* One collection's items with their fields in shape, in the collection's order. */
+function normItems(coll, list){
+  var def = ITEMS[coll];
   return (Array.isArray(list) ? list : []).filter(function(r){
     return r && typeof r === "object" && r.id;
   }).map(function(r){
     var o = JSON.parse(JSON.stringify(r));
-    RESUME_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    def.text.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    (def.maps || []).forEach(function(f){ o[f] = o[f] && typeof o[f] === "object" && !Array.isArray(o[f]) ? o[f] : {}; });
     return o;
-  }).sort(function(a, b){ return a.created < b.created ? -1 : a.created > b.created ? 1 : 0; });
+  }).sort(function(a, b){ var x = a[def.order], y = b[def.order]; return x < y ? -1 : x > y ? 1 : 0; });
+}
+function itemById(coll, id){ return state[coll].filter(function(r){ return r.id === id; })[0]; }
+/* What an export file holds, in today's shape, from any version so far:
+   {jobs, profile (or null), and each collection in ITEMS}. Throws when the
+   file is not a backup. Old exports must keep reading the same way:
+   tests/backups.test.js checks one from every version. */
+function readBackup(parsed){
+  if(!parsed || typeof parsed !== "object" || !Array.isArray(parsed.jobs)) throw new Error("not a backup");
+  var out = {jobs: normalize({jobs: JSON.parse(JSON.stringify(parsed.jobs))}).jobs,
+    profile: profileHasText(parsed.profile) ? normProfile(parsed.profile) : null};
+  Object.keys(ITEMS).forEach(function(c){ out[c] = normItems(c, parsed[c]); });
+  return out;
 }
 /* A profile document, with its text fields as strings, or null for none. */
 function normProfile(p){
@@ -532,7 +606,10 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile, resumes:state.resumes})); }catch(e){}
+    // Documents can be long, so the cache keeps them without their text.
+    var docs = state.documents.map(function(d){ var o = {}; Object.keys(d).forEach(function(k){ if(k !== "text") o[k] = d[k]; }); return o; });
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile,
+      resumes:state.resumes, documents:docs, guides:state.guides})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -591,17 +668,47 @@ function flushProfile(){
   var f = profilePending; profilePending = null;
   store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
 }
-/* Add one resume version. Versions are never changed, so this is a create. */
-function saveResume(r){
-  state.resumes = normResumes(state.resumes.concat([r]));
-  resumesPending.push(r);
-  cacheLocal();
-  flushResumes();
+/* Create or replace one item, change some of its fields, or remove it. */
+function saveItem(coll, item){
+  state[coll] = normItems(coll, state[coll].filter(function(r){ return r.id !== item.id; }).concat([item]));
+  queueItem({op:"put", coll:coll, id:item.id, item:item});
 }
-function flushResumes(){
+function changeItem(coll, id, fields){
+  var r = itemById(coll, id) || {id:id};
+  Object.keys(fields).forEach(function(k){ r[k] = fields[k]; });
+  state[coll] = normItems(coll, state[coll].filter(function(x){ return x.id !== id; }).concat([r]));
+  queueItem({op:"update", coll:coll, id:id, fields:fields});
+}
+function dropItem(coll, id){
+  state[coll] = state[coll].filter(function(r){ return r.id !== id; });
+  queueItem({op:"remove", coll:coll, id:id});
+}
+function queueItem(w){
+  itemsPending.push(JSON.parse(JSON.stringify(w)));
+  cacheLocal();
+  flushItems();
+}
+function flushItems(){
   if(!store) return;                    // stays pending until a store is ready
-  var list = resumesPending; resumesPending = [];
-  list.forEach(function(r){ store.putResume(JSON.parse(JSON.stringify(r))).catch(writeFailed); });
+  var list = itemsPending; itemsPending = [];
+  list.forEach(function(w){
+    var whole = itemById(w.coll, w.id);
+    (w.op === "put" ? store.putItem(w.coll, w.item)
+      : w.op === "update" ? store.updateItem(w.coll, w.id, w.fields, whole && JSON.parse(JSON.stringify(whole)))
+      : store.removeItem(w.coll, w.id)).catch(writeFailed);
+  });
+}
+/* A snapshot can come before a write made here is sent: keep the write. */
+function withPending(coll, list){
+  itemsPending.forEach(function(w){
+    if(w.coll !== coll) return;
+    list = list.filter(function(r){ return r.id !== w.id || w.op === "update"; });
+    if(w.op === "put") list.push(w.item);
+    if(w.op === "update") list.forEach(function(r){
+      if(r.id === w.id) Object.keys(w.fields).forEach(function(k){ r[k] = w.fields[k]; });
+    });
+  });
+  return list;
 }
 function writeFailed(e){
   var code = e && e.code;
@@ -614,13 +721,12 @@ function writeFailed(e){
 /* Every store has the same shape, so nothing outside this section knows
    where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost, onProfile, onResumes)
-                              deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache), the
-                              profile the same way, as onProfile(profile or
-                              null, fromCache), and the resume versions as
-                              onResumes(versions, fromCache); call
-                              onLost(err) if the connection drops for good
+     start(on)                deliver the whole job list now and after every
+                              change, as on.jobs(jobs, fromCache), the
+                              profile the same way, as on.profile(profile or
+                              null, fromCache), and each item collection as
+                              on.items(coll, items, fromCache); call
+                              on.lost(err) if the connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
@@ -628,12 +734,17 @@ function writeFailed(e){
      updateProfile(fields, profile)
                               merge some fields into the profile; `profile`
                               is the whole profile, for creating it       -> Promise
-     putResume(version)       create one resume version                   -> Promise
+     putItem(coll, item)      create or replace one item of a collection
+                              in ITEMS (resumes, documents, guides)       -> Promise
+     updateItem(coll, id, fields, item)
+                              merge some fields into one item; `item` is
+                              the whole item, for creating it             -> Promise
+     removeItem(coll, id)     delete one item                             -> Promise
    A hosted backend later is one more function returning this shape. */
 
 /* The artifact's shared database (the claude.ai "db" capability). The jobs
    are the `jobs` collection; the profile is the one document `profile/me`;
-   resume versions are the `resumes` collection, one document each. */
+   each collection in ITEMS is a collection of the same name. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
@@ -665,28 +776,29 @@ function artifactStore(db){
 
   return {
     kind: "live",
-    start: function(onJobs, onLost, onProfile, onResumes){
-      profileRef().onSnapshot(function(snap){
-        onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
-          snap.metadata.fromCache);
-      }, onLost);
-      db.collection("resumes").limit(1000).onSnapshot(function(snap){
-        onResumes(snap.docs.map(function(d){
+    start: function(on){
+      function rows(snap){
+        return snap.docs.map(function(d){
           var o = JSON.parse(JSON.stringify(d.data() || {}));
           o.id = d.id;
           return o;
-        }), snap.metadata.fromCache);
-      }, onLost);
+        });
+      }
+      profileRef().onSnapshot(function(snap){
+        on.profile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
+          snap.metadata.fromCache);
+      }, on.lost);
+      Object.keys(ITEMS).forEach(function(coll){
+        db.collection(coll).limit(1000).onSnapshot(function(snap){
+          on.items(coll, rows(snap), snap.metadata.fromCache);
+        }, on.lost);
+      });
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
       }).then(function(){
         db.collection("jobs").limit(1000).onSnapshot(function(snap){
-          onJobs(snap.docs.map(function(d){
-            var o = JSON.parse(JSON.stringify(d.data() || {}));
-            o.id = d.id;
-            return o;
-          }), snap.metadata.fromCache);
-        }, onLost);
+          on.jobs(rows(snap), snap.metadata.fromCache);
+        }, on.lost);
       });
     },
     update: function(id, fields, job){
@@ -705,7 +817,16 @@ function artifactStore(db){
         throw e;
       });
     },
-    putResume: function(r){ return retry(function(){ return db.doc("resumes/" + r.id).set(r); }); }
+    putItem: function(coll, item){ return retry(function(){ return db.doc(coll + "/" + item.id).set(item); }); },
+    updateItem: function(coll, id, fields, item){
+      return retry(function(){ return db.doc(coll + "/" + id).update(fields); }).catch(function(e){
+        if(e && e.code === "invalid_argument" && item){         // not there yet
+          return retry(function(){ return db.doc(coll + "/" + id).set(item); });
+        }
+        throw e;
+      });
+    },
+    removeItem: function(coll, id){ return retry(function(){ return db.doc(coll + "/" + id).delete(); }); }
   };
 }
 
@@ -714,26 +835,27 @@ function artifactStore(db){
 function browserStore(){
   function done(){ return Promise.resolve(); }
   return {kind:"local", start:function(){}, update:done, put:done, remove:done,
-    updateProfile:done, putResume:done};
+    updateProfile:done, putItem:done, updateItem:done, removeItem:done};
 }
 
-/* Fictional jobs, profile and resume versions for trying the page outside claude.ai. Edits
+/* Fictional jobs, profile and items for trying the page outside claude.ai. Edits
    stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost, onProfile, onResumes){
+    start: function(on){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).then(function(data){
-        onProfile((data && data.profile) || null, false);
-        onResumes((data && data.resumes) || [], false);
-        onJobs((data && data.jobs) || [], false);
-      }, onLost);
+        on.profile((data && data.profile) || null, false);
+        Object.keys(ITEMS).forEach(function(coll){ on.items(coll, (data && data[coll]) || [], false); });
+        on.jobs((data && data.jobs) || [], false);
+      }, on.lost);
     },
-    update: done, put: done, remove: done, updateProfile: done, putResume: done
+    update: done, put: done, remove: done, updateProfile: done,
+    putItem: done, updateItem: done, removeItem: done
   };
 }
 
@@ -755,55 +877,58 @@ function connect(){
 function useStore(s){
   store = s;
   if(s.kind === "local") setSync("local");
-  s.start(function(jobs, fromCache){
-    if(store !== s) return;               // replaced since, e.g. connection lost
-    if(!jobs.length && fromCache && state.jobs.length) return;
-    jobs.forEach(function(o){
-      var p = pending[o.id];
-      if(p) Object.keys(p).forEach(function(k){ o[k] = p[k]; });
-    });
-    state.jobs = normalize({jobs: jobs}).jobs;
-    setSync(s.kind);
-    cacheLocal();
-    refresh();
-    if(Object.keys(pending).length) flush();
-  }, function(){
-    if(store !== s) return;
-    if(s.kind === "demo"){
-      setSync("demo");
-      document.getElementById("empty").textContent =
-        "The sample data did not load. Serve the public folder over HTTP (see the README) instead of opening the file directly.";
+  s.start({
+    jobs: function(jobs, fromCache){
+      if(store !== s) return;               // replaced since, e.g. connection lost
+      if(!jobs.length && fromCache && state.jobs.length) return;
+      jobs.forEach(function(o){
+        var p = pending[o.id];
+        if(p) Object.keys(p).forEach(function(k){ o[k] = p[k]; });
+      });
+      state.jobs = normalize({jobs: jobs}).jobs;
+      setSync(s.kind);
+      cacheLocal();
       refresh();
-      return;
-    }
-    useStore(browserStore());
-    toast("Lost connection to your saved jobs. Reload to reconnect.", true);
-  }, function(p, fromCache){
-    if(store !== s) return;
-    p = normProfile(p);
-    if(!p && fromCache && state.profile) return;
-    if(profilePending){
-      p = p || {};
-      Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+      if(Object.keys(pending).length) flush();
+    },
+    lost: function(){
+      if(store !== s) return;
+      if(s.kind === "demo"){
+        setSync("demo");
+        document.getElementById("empty").textContent =
+          "The sample data did not load. Serve the public folder over HTTP (see the README) instead of opening the file directly.";
+        refresh();
+        return;
+      }
+      useStore(browserStore());
+      toast("Lost connection to your saved jobs. Reload to reconnect.", true);
+    },
+    profile: function(p, fromCache){
+      if(store !== s) return;
       p = normProfile(p);
+      if(!p && fromCache && state.profile) return;
+      if(profilePending){
+        p = p || {};
+        Object.keys(profilePending).forEach(function(k){ p[k] = profilePending[k]; });
+        p = normProfile(p);
+      }
+      state.profile = p;
+      cacheLocal();
+      renderProfileButton();
+      profileChanged();
+      if(!fromCache) offerOnboarding();
+      flushProfile();
+    },
+    items: function(coll, list, fromCache){
+      if(store !== s || !ITEMS[coll]) return;
+      if(!list.length && fromCache && state[coll].length) return;
+      var before = {};
+      state[coll].forEach(function(r){ before[r.id] = 1; });
+      state[coll] = normItems(coll, withPending(coll, list));
+      cacheLocal();
+      itemsChanged(coll, before);
+      flushItems();
     }
-    state.profile = p;
-    cacheLocal();
-    renderProfileButton();
-    if(!fromCache) offerOnboarding();
-    flushProfile();
-  }, function(list, fromCache){
-    if(store !== s) return;
-    if(!list.length && fromCache && state.resumes.length) return;
-    var have = {};
-    list.forEach(function(r){ have[r.id] = 1; });
-    resumesPending.forEach(function(r){ if(!have[r.id]) list.push(r); });   // not confirmed yet
-    var before = {};
-    state.resumes.forEach(function(r){ before[r.id] = 1; });
-    state.resumes = normResumes(list);
-    cacheLocal();
-    resumesChanged(before);
-    flushResumes();
   });
 }
 function uid(co){
@@ -1292,7 +1417,8 @@ var RESUME_METRICS = [
   {size:10,   lead:13,   gap:6, head:12, margin:48, name:19},
   {size:9.5,  lead:12.2, gap:5, head:11, margin:44, name:18}
 ];
-function layoutResume(doc, blocks, m){
+/* titles: also set bold the first line of each block (a references sheet's names). */
+function layoutResume(doc, blocks, m, titles){
   var W = 612 - m.margin*2, y = m.margin, ops = [];
   function wrap(s, x, w, style){
     doc.setFont("helvetica", style || "normal").setFontSize(m.size);
@@ -1319,7 +1445,7 @@ function layoutResume(doc, blocks, m){
     } else if(b.t === "line"){
       // A role's title: first after a heading or gap, with a line and then bullets under it.
       var prev = blocks[i-1], role = prev && (prev.t === "heading" || prev.t === "gap")
-        && next && next.t === "line" && blocks[i+2] && blocks[i+2].t === "bullet";
+        && next && next.t === "line" && (titles || (blocks[i+2] && blocks[i+2].t === "bullet"));
       var at = ops.length;
       wrap(b.s, m.margin, W, role ? "bold" : "normal");
       if(role) ops[at].keep = true;
@@ -1327,7 +1453,7 @@ function layoutResume(doc, blocks, m){
   });
   return {ops:ops, height:y, margin:m.margin};
 }
-function makeResumePdf(text, name){
+function makeResumePdf(text, name, what){
   var blocks = resumeBlocks(text);
   if(!blocks.length){ toast("Nothing to export", true); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){
@@ -1335,10 +1461,10 @@ function makeResumePdf(text, name){
   }
   var doc = new window.jspdf.jsPDF({unit:"pt", format:"letter"}), laid = null;
   for(var i=0;i<RESUME_METRICS.length;i++){
-    laid = layoutResume(doc, blocks, RESUME_METRICS[i]);
+    laid = layoutResume(doc, blocks, RESUME_METRICS[i], what === "References");
     if(laid.height <= 792 - laid.margin) break;                 // fits one page
   }
-  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0]);
+  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0], what === "References");
 
   var pageBottom = 792 - laid.margin, offsetY = 0;
   laid.ops.forEach(function(op){
@@ -1359,7 +1485,7 @@ function makeResumePdf(text, name){
   doc.setTextColor(0);
   var who = nameCase(String(blocks[0].s)).replace(/[^A-Za-z0-9]+/g, "");
   var slug = String(name || "").replace(/[^A-Za-z0-9]+/g, "");
-  offer((who ? who + "_" : "") + "Resume" + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
+  offer((who ? who + "_" : "") + (what || "Resume") + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
         "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
 }
 
@@ -1396,33 +1522,38 @@ function offer(filename, data, okMsg){
 }
 function saveState(){
   var payload = JSON.stringify({version:3, exported:today(), profile:state.profile,
-    resumes:state.resumes, jobs:state.jobs}, null, 2);
+    resumes:state.resumes, documents:state.documents, guides:state.guides, jobs:state.jobs}, null, 2);
   offer("application-desk-backup-" + today() + ".json", payload, "Backup exported");
 }
 function loadFile(file){
   var r = new FileReader();
   r.onload = function(){
     try{
-      var parsed = JSON.parse(r.result);
-      if(!parsed || !Array.isArray(parsed.jobs)) throw new Error("no jobs");
-      var incoming = normalize(parsed).jobs;
+      var got = readBackup(JSON.parse(r.result)), incoming = got.jobs;
       incoming.forEach(function(j){
         var at = -1;
         state.jobs.forEach(function(x, i){ if(x.id === j.id) at = i; });
         if(at >= 0) state.jobs[at] = j; else state.jobs.push(j);
         create(j);
       });
-      var withProfile = profileHasText(parsed.profile);
-      if(withProfile) saveProfile(normProfile(parsed.profile));
+      var withProfile = !!got.profile;
+      if(withProfile) saveProfile(got.profile);
       // Versions never change, so only ones not here yet are added.
       var known = {};
       state.resumes.forEach(function(r){ known[r.id] = 1; });
-      var versions = normResumes(parsed.resumes).filter(function(r){ return !known[r.id]; });
-      versions.forEach(saveResume);
+      var versions = got.resumes.filter(function(r){ return !known[r.id]; });
+      versions.forEach(function(r){ saveItem("resumes", r); });
+      // Documents and guides change in place: a matching id is replaced, like a job.
+      var others = {documents:0, guides:0};
+      Object.keys(others).forEach(function(coll){
+        got[coll].forEach(function(r){ saveItem(coll, r); others[coll]++; });
+      });
       ui.sel = null; renderAll();
       var parts = [incoming.length + " postings"];
       if(withProfile) parts.push("the profile");
       if(versions.length) parts.push(versions.length + " resume version" + (versions.length > 1 ? "s" : ""));
+      if(others.documents) parts.push(others.documents + " document" + (others.documents > 1 ? "s" : ""));
+      if(others.guides) parts.push(others.guides + " guide" + (others.guides > 1 ? "s" : ""));
       var last = parts.pop();
       toast("Imported " + (parts.length ? parts.join(", ") + " and " : "") + last);
     }catch(e){
@@ -1896,7 +2027,9 @@ function offerOnboarding(){
 function openGetStarted(){
   var p = state.profile || {};
   gs = {step: state.profile ? "profile" : "resume", text:"", parsedFrom:null, note:"", noSections:false,
-    f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||""}};
+    vtext:null, ddirty:false, doc:null, dnew:{kind:"letter", title:"", text:"", file:"", note:""},
+    f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||"",
+        voice:p.voice||"", more:p.more||""}};
   document.getElementById("gsScrim").hidden = false;
   renderGetStarted();
 }
@@ -1920,6 +2053,17 @@ function resumeChoices(){
   }
   return list;
 }
+/* A collection changed in the store. */
+function typingAnswer(){ var a = document.activeElement; return !!a && a.id === "gsAns"; }
+function itemsChanged(coll, before){
+  if(coll === "resumes") resumesChanged(before);
+  else if(gs && !editing() && !typingAnswer() && ((coll === "documents" && gs.step === "documents")
+    || (coll === "guides" && (gs.step === "guides" || gs.step === "guide")))) renderGetStarted();
+}
+/* The profile changed in the store: refresh a tab that shows part of it. */
+function profileChanged(){
+  if(gs && !editing() && !typingAnswer() && (gs.step === "documents" || gs.step === "guide")) renderGetStarted();
+}
 /* New versions arrived: show the newest unless the text there is being edited. */
 function resumesChanged(before){
   if(!gs || gs.step !== "versions" || gs.vtext !== null) return;
@@ -1933,8 +2077,9 @@ function resumesChanged(before){
 /* Unsaved edits in the versions step survive the first attempt to leave
    them (switch version, go back, close): a second one drops them. Dialogs
    like confirm() may be blocked in the artifact's frame, so none are used. */
+function editing(){ return !!gs && (gs.vtext !== null || gs.ddirty || gs.pdirty); }
 function dropEdits(){
-  if(!gs || gs.vtext === null || gs.warned){ if(gs) gs.warned = false; return true; }
+  if(!gs || !editing() || gs.warned){ if(gs){ gs.warned = false; gs.vtext = null; gs.ddirty = false; gs.pdirty = false; } return true; }
   gs.warned = true;
   toast("Unsaved edits. Save them as a new version, or do that again to drop them.", true);
   return false;
@@ -1952,6 +2097,7 @@ function copyResumeRequest(){
     "Copied. Paste it into your chat with Claude.");
 }
 function closeGetStarted(skipped){
+  if(gs && gs.step === "guide" && gs.keepAnswer) gs.keepAnswer();
   if(skipped && !state.profile){
     if(!DEMO){ try{ localStorage.setItem(SKIP_KEY, "skipped"); }catch(e){} }
     toast("Skipped. Get started is at the top whenever you want it.");
@@ -1965,11 +2111,25 @@ function gsNote(msg){
   if(el) el.textContent = msg;
 }
 
+/* Once there is a profile, the dialog's parts are tabs: Profile, Resumes,
+   Documents, Guides. The first-run steps (resume, done) show none. */
+var GS_TABS = [["profile","Profile"],["versions","Resumes"],["documents","Documents"],["guides","Guides"]];
+function renderGsTabs(){
+  var el = document.getElementById("gsTabs");
+  var at = gs.step === "guide" ? "guides" : gs.step;
+  var show = !!state.profile && GS_TABS.some(function(t){ return t[0] === at; });
+  el.hidden = !show;
+  if(!show) return;
+  el.innerHTML = GS_TABS.map(function(t){
+    return '<button class="tab" role="tab" data-gstab="' + t[0] + '" aria-selected="' + (t[0] === at) + '">' + t[1] + '</button>';
+  }).join("");
+}
 function renderGetStarted(){
   var had = !!state.profile;
   var body = document.getElementById("gsBody"), foot = document.getElementById("gsFoot");
   var title = document.getElementById("gsTitle"), stepEl = document.getElementById("gsStep");
   body.classList.remove("drop");
+  renderGsTabs();
 
   if(gs.step === "resume"){
     title.textContent = had ? "Replace from a resume" : "Get started";
@@ -2020,22 +2180,28 @@ function renderGetStarted(){
       + '<label for="gsName">Name</label><input class="field" id="gsName" autocomplete="off">'
       + '<label for="gsHeadline">Headline</label><input class="field" id="gsHeadline" autocomplete="off" placeholder="The kind of work you do or want, in one line">'
       + '<label for="gsSkills">Skills</label><textarea class="field prose" id="gsSkills"></textarea>'
-      + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>';
-    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost" id="gsReplace">Replace from a resume</button>'
-        + '<button class="btn ghost left" id="gsVersions">Resume versions</button>' : '')
+      + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>'
+      + '<label for="gsVoice">How you write</label><textarea class="field prose" id="gsVoice"'
+      + ' placeholder="Claude fills this in from your past letters (Documents). Edit it freely."></textarea>'
+      + '<label for="gsMore">More about you</label><textarea class="field prose" id="gsMore"'
+      + ' placeholder="Anything else Claude should know: what you want next, what you do best, what to avoid."></textarea>';
+    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost left" id="gsReplace">Replace from a resume</button>' : '')
       + (gs.parsedFrom || !had ? '<button class="btn" id="gsBack">Back</button>' : '')
       + '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
       + '<button class="btn primary" id="gsSave">Save profile</button>';
-    var map = {name:"gsName", headline:"gsHeadline", skills:"gsSkills", experience:"gsExp"};
+    var map = {name:"gsName", headline:"gsHeadline", skills:"gsSkills", experience:"gsExp", voice:"gsVoice", more:"gsMore"};
     Object.keys(map).forEach(function(k){
       var el = document.getElementById(map[k]);
       el.value = gs.f[k];
-      el.addEventListener("input", function(){ gs.f[k] = el.value; });
+      el.addEventListener("input", function(){
+        gs.f[k] = el.value;
+        // Unsaved only on the saved profile's own tab; the first-run steps save at the end.
+        gs.pdirty = had && Object.keys(map).some(function(f){ return gs.f[f] !== state.profile[f]; });
+        gs.warned = false;
+      });
     });
     var rp = document.getElementById("gsReplace");
     if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
-    var vs = document.getElementById("gsVersions");
-    if(vs) vs.addEventListener("click", function(){ openResumeVersions(""); });
     var bk = document.getElementById("gsBack");
     if(bk) bk.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
     document.getElementById("gsSave").addEventListener("click", saveGetStarted);
@@ -2048,7 +2214,9 @@ function renderGetStarted(){
     body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
       + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
       + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
-      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resume versions</b>.</li>'
+      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resumes</b>.</li>'
+      + '<li>Add past cover letters and references under <b>Documents</b>, so letters sound like you.</li>'
+      + '<li>Work through your LinkedIn and Indeed profiles, or a practice interview, under <b>Guides</b>.</li>'
       + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
     foot.innerHTML = '<button class="btn" id="gsVersions">Resume versions</button>'
       + '<button class="btn primary" id="gsDone">Done</button>';
@@ -2058,6 +2226,9 @@ function renderGetStarted(){
   }
 
   else if(gs.step === "versions") renderVersions(body, foot, title, stepEl);
+  else if(gs.step === "documents") renderDocuments(body, foot, title, stepEl);
+  else if(gs.step === "guides") renderGuides(body, foot, title, stepEl);
+  else if(gs.step === "guide") renderGuide(body, foot, title, stepEl);
 
   var skip = document.getElementById("gsSkip");
   if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
@@ -2131,7 +2302,7 @@ function renderVersions(body, foot, title, stepEl){
   save.addEventListener("click", function(){
     var r = {id:uid("r"), created:new Date().toISOString(), label:"Edited", job:v.job, base:v.id,
       by:"user", text:box.value.trim(), notes:""};
-    saveResume(r);
+    saveItem("resumes", r);
     gs.sel = r.id; gs.vtext = null;
     renderGetStarted();
     toast("Saved as a new version");
@@ -2149,6 +2320,273 @@ function renderVersions(body, foot, title, stepEl){
   });
 }
 
+/* The guides, with how far each has got. */
+function renderGuides(body, foot, title, stepEl){
+  title.textContent = "Guides";
+  stepEl.textContent = "";
+  body.innerHTML = '<p class="lead">Fiddly jobs outside Seed Change, one step at a time. Claude drafts what to'
+    + ' write; you do the clicking. Your progress is kept, so stop whenever you like.</p>'
+    + Object.keys(GUIDES).map(function(id){
+        var def = GUIDES[id], pr = guideProgress(def, itemById("guides", id));
+        var label = pr.finished ? "Review" : (pr.done || pr.skipped) ? "Continue" : "Start";
+        return '<div class="gcard"><div class="t"><b>' + esc(def.title) + '</b><span>' + esc(def.intro) + '</span><br>'
+          + '<span class="hint">' + pr.done + ' of ' + pr.total + ' done' + (pr.skipped ? ' · ' + pr.skipped + ' skipped' : '')
+          + '</span></div><button class="btn sm' + (pr.finished ? '' : ' primary') + '" data-guide="' + id + '">' + label + '</button></div>';
+      }).join("");
+  foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+  Array.prototype.forEach.call(body.querySelectorAll("[data-guide]"), function(b){
+    b.addEventListener("click", function(){
+      var def = GUIDES[b.dataset.guide];
+      gs.guide = b.dataset.guide;
+      gs.gi = guideProgress(def, itemById("guides", gs.guide)).next;
+      gs.step = "guide"; renderGetStarted();
+    });
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+}
+/* Write some of a guide's maps (status, answers), creating it if need be.
+   The page writes only status and answers; Claude only drafts and summary. */
+function saveGuide(id, fields){
+  var now = new Date().toISOString();
+  if(!itemById("guides", id)) fields.created = now;
+  fields.updated = now;
+  changeItem("guides", id, fields);
+}
+function renderGuide(body, foot, title, stepEl){
+  var def = GUIDES[gs.guide], g = itemById("guides", gs.guide) || {status:{}, answers:{}, drafts:{}, summary:""};
+  var n = def.steps.length, i = Math.max(0, Math.min(n - 1, gs.gi || 0)), st = def.steps[i];
+  var draft = (g.drafts[st.id] || "").trim(), interview = def.kind === "interview";
+  title.textContent = def.title;
+  stepEl.textContent = "Step " + (i + 1) + " of " + n;
+  var ask = interview
+    ? "Please review my practice interview answers in Seed Change (guide \"interview\" in the guides collection)."
+      + " For each answered question, write short feedback into drafts by step id: what works, what to tighten,"
+      + " and a stronger version in my own voice. Then write into summary anything the answers taught you about me"
+      + " that my profile is missing, as plain text I can add to it. Keep it truthful: don't invent experience."
+      + " Don't change answers or status."
+    : "Please draft my " + def.siteName + " profile sections in Seed Change (guide \"" + gs.guide + "\" in the guides"
+      + " collection; its steps and ids are in docs/schema.md). If you can use Claude in Chrome, first read my current"
+      + " profile at " + def.site + ", read-only: never click Edit, Save or anything that changes the site. Draft each"
+      + " step from my profile, documents and latest resume version, following my voice note and the site's limits,"
+      + " and save them into the guide's drafts map by step id. Keep it truthful. Don't change status or answers.";
+
+  body.innerHTML = '<div class="pills">' + def.steps.map(function(x, k){
+      var v = g.status[x.id];
+      return '<button class="pill2' + (v === "done" ? " done" : v === "skipped" ? " skipped" : "") + '" data-gi="' + k + '"'
+        + (k === i ? ' aria-current="step"' : '') + ' title="' + esc(x.title) + '">' + (v === "done" ? "✓" : k + 1) + '</button>';
+    }).join("") + '</div>'
+    + '<h3 class="q">' + esc(st.title) + '</h3><p class="lead">' + esc(st.where) + '</p>'
+    + (interview
+      ? '<label for="gsAns">Your answer</label><textarea class="field prose" id="gsAns"></textarea>'
+        + (draft ? '<div class="notes"><b>Claude\'s feedback</b>' + esc(g.drafts[st.id]) + '</div>' : '')
+      : st.paste === false ? ''
+      : draft ? '<div class="notes"><b>Claude\'s draft</b>' + esc(g.drafts[st.id]) + '</div>'
+        + '<div class="rowbtns"><button class="btn sm" id="gsGCopy">Copy draft</button>'
+        + (st.limit ? '<span class="hint">' + g.drafts[st.id].length + ' of ' + st.limit + ' characters</span>' : '') + '</div>'
+      : '<p class="qempty">No draft yet. Copy the request below into your chat with Claude.</p>')
+    + (def.site ? '<div class="rowbtns"><a class="btn sm" href="' + esc(def.site) + '" target="_blank" rel="noopener">Open '
+      + esc(def.siteName) + ' ↗</a><span class="hint">Sites change their layouts; if a button isn\'t where this says, look for its name.</span></div>' : '')
+    + (interview && g.summary.trim() ? '<div class="notes"><b>Claude\'s suggestions for your profile</b>' + esc(g.summary) + '</div>'
+      + '<div class="rowbtns"><button class="btn sm" id="gsAddMore">Add to “More about you”</button></div>' : '')
+    + '<div class="ask"><div class="rowbtns" style="margin-top:0"><button class="btn sm" id="gsGAsk">Copy request for Claude</button>'
+    + '<span class="hint">' + (interview ? "Answer a few, then paste it into your chat." : "Paste it into your chat; drafts appear here.") + '</span></div></div>';
+  foot.innerHTML = '<button class="btn ghost left" id="gsAll">All guides</button>'
+    + '<button class="btn" id="gsGBack"' + (i ? '' : ' disabled') + '>Back</button>'
+    + '<button class="btn ghost" id="gsGSkip">Skip</button>'
+    + '<button class="btn primary" id="gsGDone">' + (interview ? "Save and next" : "Done") + (i === n - 1 ? "" : " →") + '</button>';
+
+  // An answer saves as it is typed (after a pause), and at once on leaving it.
+  var ans = document.getElementById("gsAns"), timer = null, guide = gs.guide;
+  function keepAnswer(){
+    clearTimeout(timer);
+    var cur = itemById("guides", guide), was = (cur && cur.answers[st.id]) || "";
+    if(!ans || ans.value === was) return;
+    var answers = JSON.parse(JSON.stringify((cur && cur.answers) || {}));
+    answers[st.id] = ans.value;
+    saveGuide(guide, {answers:answers});
+  }
+  gs.keepAnswer = keepAnswer;
+  if(ans){
+    ans.value = g.answers[st.id] || "";
+    ans.addEventListener("input", function(){ clearTimeout(timer); timer = setTimeout(keepAnswer, 800); });
+    ans.addEventListener("blur", keepAnswer);
+  }
+  function go(k){ keepAnswer(); gs.gi = k; renderGetStarted(); }
+  function mark(v){
+    keepAnswer();
+    var cur = itemById("guides", guide);
+    var status = JSON.parse(JSON.stringify((cur && cur.status) || {}));
+    status[st.id] = v;
+    saveGuide(guide, {status:status});
+    var pr = guideProgress(def, itemById("guides", guide));
+    if(i < n - 1) go(i + 1);
+    else if(pr.finished){ toast(def.title + ": all done"); gs.step = "guides"; renderGetStarted(); }
+    else go(pr.next);
+  }
+  Array.prototype.forEach.call(body.querySelectorAll("[data-gi]"), function(b){
+    b.addEventListener("click", function(){ go(+b.dataset.gi); });
+  });
+  var cp = document.getElementById("gsGCopy");
+  if(cp) cp.addEventListener("click", function(){ copy(g.drafts[st.id], "Draft copied"); });
+  var more = document.getElementById("gsAddMore");
+  if(more) more.addEventListener("click", function(){
+    var had = state.profile ? state.profile.more.trim() : "";
+    saveProfile({more:(had ? had + "\n\n" : "") + g.summary.trim()});
+    toast("Added to More about you");
+  });
+  document.getElementById("gsGAsk").addEventListener("click", function(){
+    keepAnswer();
+    copy(ask, "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsAll").addEventListener("click", function(){ keepAnswer(); gs.step = "guides"; renderGetStarted(); });
+  document.getElementById("gsGBack").addEventListener("click", function(){ if(i) go(i - 1); });
+  document.getElementById("gsGSkip").addEventListener("click", function(){ mark("skipped"); });
+  document.getElementById("gsGDone").addEventListener("click", function(){ mark("done"); });
+}
+
+var DOC_KINDS = {letter:"Cover letter", reference:"References", writing:"Writing sample", other:"Other"};
+function kindOptions(sel){
+  return Object.keys(DOC_KINDS).map(function(k){
+    return '<option value="' + k + '"' + (k === sel ? " selected" : "") + '>' + DOC_KINDS[k] + '</option>';
+  }).join("");
+}
+function renderDocuments(body, foot, title, stepEl){
+  title.textContent = "Documents";
+  stepEl.textContent = "";
+  var d = gs.doc && itemById("documents", gs.doc);
+  if(d){ renderDocument(d, body, foot); return; }
+  gs.doc = null;
+  var jobs = state.jobs.filter(function(j){ return j.status !== "closed"; })
+    .sort(function(a, b){ return a.company.localeCompare(b.company); });
+  var voice = state.profile && state.profile.voice.trim();
+  body.innerHTML = '<p class="lead">Past cover letters, references and other writing. Claude learns how you write'
+    + ' from your letters and writing samples, and keeps your references ready for applications. They are kept in'
+    + ' your own Seed Change and sent nowhere.</p>'
+    + (state.documents.length ? '<div class="dlist">' + state.documents.slice().reverse().map(function(x){
+        return '<button class="drow" data-doc="' + esc(x.id) + '"><span class="tag">' + esc(DOC_KINDS[x.kind] || "Other") + '</span>'
+          + '<span class="t">' + esc(x.title || "Untitled") + '</span><span class="hint">' + esc(x.added.slice(0, 10)) + '</span></button>';
+      }).join("") + '</div>' : '<p class="qempty">No documents yet.</p>')
+    + (voice ? '<div class="notes"><b>How you write (Claude\'s note; edit it under Profile)</b>' + esc(state.profile.voice) + '</div>'
+      : '<p class="qempty">Claude hasn\'t written a note on how you write yet. Add a letter or two, then ask below.</p>')
+    + '<div class="ask"><label>Add a document</label><div class="two">'
+    + '<select class="field" id="gsDKind">' + kindOptions(gs.dnew.kind) + '</select>'
+    + '<input class="field" id="gsDTitle" autocomplete="off" placeholder="Title, e.g. Letter to a library, 2025"></div>'
+    + '<div class="pick" style="margin-top:8px"><button class="btn sm" id="gsDPick">Choose a PDF or Word file</button>'
+    + '<span class="hint" id="gsNote"></span></div>'
+    + '<input type="file" id="gsDFile" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>'
+    + '<textarea class="field prose" id="gsDText" placeholder="…or paste its text here"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsDAdd">Add document</button></div></div>'
+    + '<div class="ask"><label>Ask Claude</label>'
+    + '<div class="rowbtns" style="margin-top:0"><button class="btn sm" id="gsVoiceAsk">Copy request: learn how I write</button></div>'
+    + '<div class="two" style="margin-top:6px"><button class="btn sm" id="gsRefAsk">Copy request: references sheet</button>'
+    + '<select class="field" id="gsRefFor"><option value="">for every job</option>' + jobs.map(function(j){
+        return '<option value="' + esc(j.id) + '">for ' + esc(j.company + " — " + j.title) + '</option>';
+      }).join("") + '</select></div>'
+    + '<p class="hint">Paste the request into your chat with Claude. What it writes appears here.</p></div>';
+  foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+
+  Array.prototype.forEach.call(body.querySelectorAll("[data-doc]"), function(b){
+    b.addEventListener("click", function(){ gs.doc = b.dataset.doc; gs.ddirty = false; renderGetStarted(); });
+  });
+  var kind = document.getElementById("gsDKind"), ttl = document.getElementById("gsDTitle"), txt = document.getElementById("gsDText");
+  ttl.value = gs.dnew.title; txt.value = gs.dnew.text;
+  document.getElementById("gsNote").textContent = gs.dnew.note;
+  kind.addEventListener("change", function(){ gs.dnew.kind = kind.value; });
+  ttl.addEventListener("input", function(){ gs.dnew.title = ttl.value; });
+  txt.addEventListener("input", function(){ gs.dnew.text = txt.value; });
+  document.getElementById("gsDPick").addEventListener("click", function(){ document.getElementById("gsDFile").click(); });
+  document.getElementById("gsDFile").addEventListener("change", function(e){
+    var f = e.target.files && e.target.files[0], flow = gs;
+    e.target.value = "";
+    if(!f) return;
+    gsNote(gs.dnew.note = "Reading " + f.name + "…");
+    fileText(f).then(function(text){
+      if(gs !== flow) return;
+      gs.dnew.text = text; gs.dnew.file = f.name;
+      if(!gs.dnew.title.trim()) gs.dnew.title = f.name.replace(/\.[a-z]+$/i, "").replace(/[_-]+/g, " ");
+      gs.dnew.note = "Read " + f.name + ". Check it, then Add document.";
+      if(gs.step === "documents" && !gs.doc) renderGetStarted();
+    }, function(msg){ if(gs === flow) gsNote(gs.dnew.note = String(msg)); });
+  });
+  document.getElementById("gsDAdd").addEventListener("click", function(){
+    var text = gs.dnew.text.trim();
+    if(!text){ toast("Paste the text or choose a file first", true); return; }
+    var docItem = {id:uid("d"), added:new Date().toISOString(), kind:gs.dnew.kind,
+      title:gs.dnew.title.trim() || DOC_KINDS[gs.dnew.kind], text:text.slice(0, RESUME_MAX), file:gs.dnew.file};
+    saveItem("documents", docItem);
+    gs.dnew = {kind:gs.dnew.kind, title:"", text:"", file:"", note:""};
+    renderGetStarted();
+    toast("Added " + docItem.title + (text.length > RESUME_MAX ? " (the first 60,000 characters)" : ""));
+  });
+  document.getElementById("gsVoiceAsk").addEventListener("click", function(){
+    copy("Please read my cover letters and writing samples in Seed Change (the documents collection) and write"
+      + " a short note on how I write into my profile's voice field: tone, sentence length, words and phrases I use"
+      + " or avoid, how I open and close. Keep it under 150 words and quote nothing private. Follow it when you"
+      + " draft my letters and form answers. Don't change the documents.", "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsRefAsk").addEventListener("click", function(){
+    var j = byId(document.getElementById("gsRefFor").value);
+    copy("Please make a references sheet in Seed Change from my reference documents"
+      + (j ? ", for the " + j.title + " job at " + j.company + "  [" + j.id + "], choosing the references that fit it best"
+        : ", with all my references")
+      + ". Save it as a new document of kind \"reference\" titled \"References sheet" + (j ? " for " + j.company : "") + "\":"
+      + " my name on the first line, my contact line under it, a REFERENCES heading, then for each reference their"
+      + " name, title and organisation, how they know me, and their phone and email. Use only details that are in my"
+      + " documents. Don't change the other documents.", "Copied. Paste it into your chat with Claude.");
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+}
+/* One document, open for reading and editing. */
+function renderDocument(d, body, foot){
+  body.innerHTML = '<div class="two"><div><label for="gsEKind">Kind</label><select class="field" id="gsEKind">'
+    + kindOptions(d.kind) + '</select></div><div><label for="gsETitle">Title</label>'
+    + '<input class="field" id="gsETitle" autocomplete="off"></div></div>'
+    + '<p class="meta">' + esc(["added " + d.added.slice(0, 10)].concat(d.file ? ["from " + d.file] : []).join(" · ")) + '</p>'
+    + '<label for="gsEText">Text</label><textarea class="field prose tall" id="gsEText"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsESave" hidden>Save changes</button>'
+    + '<button class="btn sm" id="gsEPdf">Save PDF</button><button class="btn sm" id="gsECopy">Copy text</button>'
+    + '<button class="btn ghost sm" id="gsERemove">Remove</button><span class="hint" id="gsEHint"></span></div>';
+  foot.innerHTML = '<button class="btn ghost left" id="gsEBack">Back to documents</button>'
+    + '<button class="btn primary" id="gsClose">Close</button>';
+  var kind = document.getElementById("gsEKind"), ttl = document.getElementById("gsETitle"), txt = document.getElementById("gsEText");
+  var save = document.getElementById("gsESave"), rm = document.getElementById("gsERemove");
+  ttl.value = d.title; txt.value = d.text;
+  function mark(){
+    gs.ddirty = kind.value !== d.kind || ttl.value !== d.title || txt.value !== d.text;
+    gs.warned = false;
+    save.hidden = !gs.ddirty;
+    document.getElementById("gsEHint").textContent = gs.ddirty ? "edited, not saved" : "";
+  }
+  [kind, ttl, txt].forEach(function(el){ el.addEventListener("input", mark); el.addEventListener("change", mark); });
+  save.addEventListener("click", function(){
+    changeItem("documents", d.id, {kind:kind.value, title:ttl.value.trim() || DOC_KINDS[kind.value], text:txt.value.trim()});
+    gs.ddirty = false;
+    renderGetStarted();
+    toast("Saved");
+  });
+  document.getElementById("gsEPdf").addEventListener("click", function(){
+    if(kind.value === "letter") makePdf({company:ttl.value}, txt.value);
+    else makeResumePdf(txt.value, ttl.value, kind.value === "reference" ? "References" : "Document");
+  });
+  document.getElementById("gsECopy").addEventListener("click", function(){ copy(txt.value, "Copied"); });
+  rm.addEventListener("click", function(){
+    if(gs.removing !== d.id){ gs.removing = d.id; rm.textContent = "Click again to remove"; return; }
+    gs.removing = null; gs.ddirty = false;
+    dropItem("documents", d.id);
+    gs.doc = null;
+    renderGetStarted();
+    toast("Removed " + d.title);
+  });
+  document.getElementById("gsEBack").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    gs.doc = null; renderGetStarted();
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    closeGetStarted(false);
+  });
+}
+
 function saveGetStarted(){
   var fields = {};
   Object.keys(gs.f).forEach(function(k){ fields[k] = gs.f[k].trim(); });
@@ -2156,6 +2594,7 @@ function saveGetStarted(){
   var any = Object.keys(fields).some(function(k){ return fields[k]; });
   if(!any){ toast("Nothing to save yet. Fill in a field, or skip for now.", true); return; }
   var first = !state.profile;
+  gs.pdirty = false;
   saveProfile(fields);
   renderProfileButton();
   if(gs.parsedFrom && gs.parsedFrom.length > RESUME_MAX) toast("Saved. Only the first 60,000 characters of the resume were kept.");
@@ -2163,38 +2602,44 @@ function saveGetStarted(){
   else { closeGetStarted(false); toast("Profile saved"); }
 }
 
-/* Read a picked or dropped file into the resume box. The readers load from
-   cdnjs the first time they are needed, so the page itself stays light. */
-function readResumeFile(file){
+/* The text of a picked or dropped PDF or Word file. Resolves the text, or
+   rejects with a message to show. The readers load from cdnjs the first time
+   they are needed, so the page itself stays light. */
+function fileText(file){
   var name = file.name || "the file";
   var kind = (/\.pdf$/i.test(name) || file.type === "application/pdf") ? "pdf"
     : /\.docx$/i.test(name) ? "docx" : /\.doc$/i.test(name) ? "doc" : "";
-  if(kind === "doc"){ gsNote("Older .doc files can't be read here. Save it as .docx or PDF, or paste the text."); return; }
-  if(!kind){ gsNote("Pick a PDF or a Word (.docx) file, or paste the text."); return; }
-  if(file.size > 10*1024*1024){ gsNote("That file is over 10 MB. Paste the text instead."); return; }
-  gsNote("Reading " + name + "…");
-  var flow = gs, r = new FileReader();
-  r.onload = function(){
-    (kind === "pdf" ? readPdf(r.result) : readDocx(r.result)).then(function(text){
-      if(gs !== flow) return;                       // closed or reopened meanwhile
+  if(kind === "doc") return Promise.reject("Older .doc files can't be read here. Save it as .docx or PDF, or paste the text.");
+  if(!kind) return Promise.reject("Pick a PDF or a Word (.docx) file, or paste the text.");
+  if(file.size > 10*1024*1024) return Promise.reject("That file is over 10 MB. Paste the text instead.");
+  return new Promise(function(res, rej){
+    var r = new FileReader();
+    r.onload = function(){ res(r.result); };
+    r.onerror = function(){ rej("Couldn't open that file. Paste the text instead."); };
+    r.readAsArrayBuffer(file);
+  }).then(function(buf){
+    return (kind === "pdf" ? readPdf(buf) : readDocx(buf)).then(function(text){
       text = text.trim();
-      if(!text){
-        gsNote(kind === "pdf" ? "This PDF has no text to read (it may be a scan). Paste the text instead." : "No text found in that file.");
-        return;
-      }
-      gs.text = text;
-      var box = document.getElementById("gsText");
-      if(box) box.value = text;
-      gsNote("Read " + name + ". Check the text, then Next.");
+      if(!text) throw (kind === "pdf" ? "This PDF has no text to read (it may be a scan). Paste the text instead." : "No text found in that file.");
+      return text;
     }, function(e){
-      if(gs !== flow) return;
-      gsNote(e && e.code === "load" ? "The reader didn't load. Check your connection, or paste the text instead."
+      throw (e && e.code === "load" ? "The reader didn't load. Check your connection, or paste the text instead."
         : e && e.name === "PasswordException" ? "This PDF is password-protected. Paste the text instead."
         : "Couldn't read that file. Paste the text instead.");
     });
-  };
-  r.onerror = function(){ if(gs === flow) gsNote("Couldn't open that file. Paste the text instead."); };
-  r.readAsArrayBuffer(file);
+  });
+}
+/* Read a picked or dropped file into the resume box. */
+function readResumeFile(file){
+  var name = file.name || "the file", flow = gs;
+  gsNote("Reading " + name + "…");
+  fileText(file).then(function(text){
+    if(gs !== flow) return;                         // closed or reopened meanwhile
+    gs.text = text;
+    var box = document.getElementById("gsText");
+    if(box) box.value = text;
+    gsNote("Read " + name + ". Check the text, then Next.");
+  }, function(msg){ if(gs === flow) gsNote(String(msg)); });
 }
 
 var loadedScripts = {};
@@ -2317,6 +2762,86 @@ function parseFormQuestions(raw, existing){
   return out;
 }
 
+/* ============================ guides ============================ */
+/* Step-by-step guides through chores outside Seed Change. Each step says
+   where to go and what to do; Claude writes a draft for each step (or, in
+   the practice interview, feedback on the answer). Step ids are stable:
+   Claude writes drafts by them, so rename a step's text freely but never
+   its id. Sites change their layouts, so steps name buttons, not places. */
+var GUIDES = {
+  linkedin: {title:"LinkedIn profile", kind:"profile", site:"https://www.linkedin.com/in/me/", siteName:"LinkedIn",
+    intro:"One section at a time: Claude drafts it from your profile and documents, you paste it in and save on LinkedIn.",
+    steps:[
+      {id:"photo", title:"Photo and banner", paste:false,
+        where:"On your profile, click your photo to change it, and the camera icon on the banner. A clear, friendly head-and-shoulders photo gets more views. Nothing to paste."},
+      {id:"headline", title:"Headline", limit:220,
+        where:"Click the pencil by your name (Edit intro) and replace the Headline."},
+      {id:"about", title:"About", limit:2600,
+        where:"Find About on your profile and click its pencil. With no About yet, use Add profile section, then Core, then Add about."},
+      {id:"experience", title:"Experience",
+        where:"In Experience, click the pencil, then the pencil on each role, and replace its description with that role's part of the draft (up to 2,000 characters each)."},
+      {id:"skills", title:"Skills",
+        where:"In Skills, click + to add each skill the draft lists, then pin your top three."},
+      {id:"open", title:"Open to work",
+        where:"Under your name, click Open to, then Finding a new job. Add the job titles, locations and workplace types from the draft. Choose Recruiters only if you'd rather your current employer didn't see it."},
+      {id:"featured", title:"Featured (optional)",
+        where:"Add profile section, then Recommended, then Add featured, and add what the draft suggests. Skip this if there's nothing to show yet."},
+      {id:"url", title:"Custom URL",
+        where:"Click Edit public profile & URL, then change your custom URL to the one the draft suggests, if it's free."}
+    ]},
+  indeed: {title:"Indeed profile", kind:"profile", site:"https://profile.indeed.com/", siteName:"Indeed",
+    intro:"One part of your Indeed profile at a time: Claude drafts it, you paste it in and save on Indeed.",
+    steps:[
+      {id:"resume", title:"Resume",
+        where:"Under Resume, upload a PDF. Save one first from Profile, Resumes (pick the version, then Save PDF). The draft says which version suits the jobs you want."},
+      {id:"summary", title:"Headline and summary",
+        where:"If you use Indeed's own resume rather than a file, edit it and paste in this headline and summary. Skip this if you uploaded a PDF."},
+      {id:"qualifications", title:"Qualifications",
+        where:"Under Improve your job matches, open Qualifications and add each skill, licence, certification and education entry the draft lists."},
+      {id:"preferences", title:"Job preferences",
+        where:"Under Improve your job matches, open Job preferences and set the job titles, minimum pay, job types, schedule and locations from the draft."},
+      {id:"ready", title:"Ready to work and visibility", paste:false,
+        where:"Turn on Ready to work if you can start soon, and choose whether employers can find your resume. Nothing to paste."}
+    ]},
+  interview: {title:"Practice interview", kind:"interview",
+    intro:"Questions an HR screener or a work-placement counsellor would ask. Answer in your own words; Claude gives feedback on each and suggests what to add to your profile.",
+    steps:[
+      {id:"about", title:"Tell me about yourself.",
+        where:"About two minutes: where you are now, what you've done that matters for this kind of work, and what you want next."},
+      {id:"next", title:"Why are you looking now, and what kind of role do you want next?",
+        where:"Keep it forward-looking: what you're moving towards, not away from."},
+      {id:"proud", title:"What work are you proudest of?",
+        where:"One example: what the situation was, what you did, and what came of it. Numbers help."},
+      {id:"problem", title:"Tell me about a problem you solved at work.",
+        where:"Pick one with a clear before and after."},
+      {id:"conflict", title:"Tell me about a disagreement at work, and how it ended.",
+        where:"Show how you listened and what you'd do the same or differently."},
+      {id:"learn", title:"Tell me about something you had to learn quickly.",
+        where:"What you learned, how, and how fast you were useful with it."},
+      {id:"strengths", title:"What are your strengths, and what do you find hard?",
+        where:"Two or three strengths with an example each; one real difficulty and what you do about it."},
+      {id:"workplace", title:"What kind of workplace suits you?",
+        where:"Team size, hours, remote or on site, travel, pace. There are no wrong answers here."},
+      {id:"support", title:"Is there anything that helps you do your best work? (optional)",
+        where:"Training, schedule, tools or accommodations. Share only what you want to."},
+      {id:"history", title:"Is there anything in your history you'd want to explain? (optional)",
+        where:"Gaps, changes of field, short roles: a sentence or two, said plainly, is enough."},
+      {id:"questions", title:"What would you ask the employer?",
+        where:"Two or three questions that show you've thought about the work."}
+    ]}
+};
+/* How far a guide has got: steps done and skipped, and the first step left. */
+function guideProgress(def, g){
+  var status = (g && g.status) || {}, done = 0, skipped = 0, next = -1;
+  def.steps.forEach(function(st, i){
+    var v = status[st.id];
+    if(v === "done") done++;
+    else if(v === "skipped") skipped++;
+    else if(next < 0) next = i;
+  });
+  return {done:done, skipped:skipped, total:def.steps.length, next:next < 0 ? 0 : next, finished:next < 0};
+}
+
 /* ============================ events ============================ */
 document.getElementById("headrow").addEventListener("click", function(e){
   var th = e.target.closest("th"); if(!th) return;
@@ -2412,6 +2937,30 @@ document.getElementById("addConfirm").addEventListener("click", function(){
   toast("Added " + j.company);
 });
 document.getElementById("btnStart").addEventListener("click", openGetStarted);
+/* About: the version, and links that open a prefilled GitHub issue. The
+   links carry only the version and where the page runs, never any data. */
+document.getElementById("btnAbout").addEventListener("click", function(){
+  var ver = APP_VERSION + (DEMO ? " (demo)" : store && store.kind === "local" ? " (claude.ai, this browser only)" : " (claude.ai)");
+  var q = "&version=" + encodeURIComponent(ver);
+  document.getElementById("aboutVer").textContent = "version " + APP_VERSION;
+  document.getElementById("aboutBug").href = REPO_URL + "/issues/new?template=bug.yml" + q;
+  document.getElementById("aboutIdea").href = REPO_URL + "/issues/new?template=feature.yml" + q;
+  document.getElementById("aboutNew").href = REPO_URL + "/releases";
+  document.getElementById("aboutScrim").hidden = false;
+});
+document.getElementById("aboutClose").addEventListener("click", function(){ document.getElementById("aboutScrim").hidden = true; });
+document.getElementById("gsTabs").addEventListener("click", function(e){
+  var t = e.target.closest("[data-gstab]");
+  if(!t || !gs || !dropEdits()) return;
+  if(gs.step === "guide" && gs.keepAnswer) gs.keepAnswer();
+  if(t.dataset.gstab === "profile" && state.profile){        // show the profile as saved now
+    var p = state.profile;
+    Object.keys(gs.f).forEach(function(k){ gs.f[k] = p[k] || ""; });
+    gs.parsedFrom = null;
+  }
+  if(t.dataset.gstab === "versions") openResumeVersions("");
+  else { gs.step = t.dataset.gstab; gs.doc = null; gs.guide = null; renderGetStarted(); }
+});
 var gsBody = document.getElementById("gsBody");
 gsBody.addEventListener("dragover", function(e){
   if(!gs || gs.step !== "resume") return;
@@ -2426,7 +2975,8 @@ gsBody.addEventListener("drop", function(e){
 });
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
-    if(gs){ if(gs.step !== "versions" || dropEdits()) closeGetStarted(gs.step !== "versions"); return; }
+    if(!document.getElementById("aboutScrim").hidden){ document.getElementById("aboutScrim").hidden = true; return; }
+    if(gs){ if(dropEdits()) closeGetStarted(true); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
   }
