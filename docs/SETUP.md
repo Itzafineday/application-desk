@@ -111,6 +111,11 @@ In the page itself:
   one page.
 - **Questions tab:** type a question about the job, then ask Claude in chat to
   answer it. The answer appears in the thread.
+- **Resume versions** (in **Profile**, or **Tailor resume** on a job's Letter
+  tab): pick the job, or none for a general polish, click **Copy request for
+  Claude** and paste it into your chat. Claude's version appears with notes
+  on what it changed. Edit any version and save it as a new one, or click
+  **Save PDF**.
 - **Help me apply tab:** when a company's own site asks you to fill in a long
   form, copy its questions, paste them here, and click **Copy request for
   Claude**. Paste that into your chat with Claude, and a draft answer appears

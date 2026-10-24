@@ -80,6 +80,10 @@ artifact tools). Other agents work on code and sample data only.
 - Help me apply: draft answers into `answer` on the entries in a job's `form`,
   from the profile (`profile/me`) and the posting. Never remove or reorder
   entries. Never submit an application, or anything else, on a company site.
+- Resume polisher: add a new document to `resumes` (see `docs/schema.md`) with
+  `notes` on what changed and why. Never change or delete a version, and
+  never change the profile's `resume`. Keep it truthful: don't invent
+  experience; ask in the notes instead.
 - Pin every write to the document version you read, so a change made in the
   page at the same time is not overwritten.
 - Before changing more than a few jobs, save a backup of the `jobs` collection

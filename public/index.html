@@ -300,6 +300,18 @@ textarea.note{min-height:110px;font-size:13px}
 .gs .foot .left{margin-right:auto}
 .gs ul{margin:0;padding-left:18px;line-height:1.75}
 .gs .body.drop{outline:2px dashed var(--accent-line);outline-offset:-8px}
+.gs select.field{
+  width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:6px 8px;font-size:13px;
+}
+.gs .meta{font-size:11.5px;color:var(--muted);margin:6px 0 0;font-family:"IBM Plex Mono",monospace}
+.gs .notes{
+  white-space:pre-wrap;font-size:12.5px;line-height:1.6;margin:10px 0 0;padding:8px 11px;
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius);
+}
+.gs .notes b{display:block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+.gs .rowbtns{align-items:center}
+.gs .ask{margin-top:18px;padding-top:12px;border-top:1px solid var(--line-soft)}
 
 /* ---------- toast ---------- */
 .toast{
@@ -786,8 +798,11 @@ function useStore(s){
     var have = {};
     list.forEach(function(r){ have[r.id] = 1; });
     resumesPending.forEach(function(r){ if(!have[r.id]) list.push(r); });   // not confirmed yet
+    var before = {};
+    state.resumes.forEach(function(r){ before[r.id] = 1; });
     state.resumes = normResumes(list);
     cacheLocal();
+    resumesChanged(before);
     flushResumes();
   });
 }
@@ -1010,6 +1025,7 @@ function renderTab(){
       + '<button class="btn primary sm" id="btnPdf">Save PDF</button>'
       + '<button class="btn sm" id="btnCopyL">Copy text</button>'
       + '<button class="btn sm" id="btnDash">Fix em dashes</button>'
+      + '<button class="btn ghost sm" id="btnTailor">Tailor resume</button>'
       + '<span class="hint" id="lHint"></span></div>';
     var lb = document.getElementById("letterBox");
     lb.value = j.letter || "";
@@ -1031,6 +1047,7 @@ function renderTab(){
       copy(lb.value, "Letter copied");
     });
     document.getElementById("btnPdf").addEventListener("click", function(){ makePdf(j, lb.value); });
+    document.getElementById("btnTailor").addEventListener("click", function(){ openResumeVersions(j.id); });
   }
 
   else if(ui.tab === "questions"){
@@ -1300,7 +1317,12 @@ function layoutResume(doc, blocks, m){
       ops.push({t:"text", s:"•", x:m.margin + 2, y:y, size:m.size});
       wrap(b.s, m.margin + 13, W - 13);
     } else if(b.t === "line"){
-      wrap(b.s, m.margin, W);
+      // A role's title: first after a heading or gap, with a line and then bullets under it.
+      var prev = blocks[i-1], role = prev && (prev.t === "heading" || prev.t === "gap")
+        && next && next.t === "line" && blocks[i+2] && blocks[i+2].t === "bullet";
+      var at = ops.length;
+      wrap(b.s, m.margin, W, role ? "bold" : "normal");
+      if(role) ops[at].keep = true;
     } else y += m.gap;
   });
   return {ops:ops, height:y, margin:m.margin};
@@ -1321,7 +1343,7 @@ function makeResumePdf(text, name){
   var pageBottom = 792 - laid.margin, offsetY = 0;
   laid.ops.forEach(function(op){
     var y = op.y - offsetY;
-    // A heading never ends a page: it moves over with the lines under it.
+    // A heading or a role's title never ends a page: it moves over with the lines under it.
     if(y > pageBottom || (op.keep && y + 3*RESUME_METRICS[0].lead > pageBottom)){
       doc.addPage();
       offsetY = op.y - laid.margin;
@@ -1335,7 +1357,7 @@ function makeResumePdf(text, name){
     }
   });
   doc.setTextColor(0);
-  var who = String(blocks[0].s).replace(/[^A-Za-z0-9]+/g, "");
+  var who = nameCase(String(blocks[0].s)).replace(/[^A-Za-z0-9]+/g, "");
   var slug = String(name || "").replace(/[^A-Za-z0-9]+/g, "");
   offer((who ? who + "_" : "") + "Resume" + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
         "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
@@ -1878,6 +1900,57 @@ function openGetStarted(){
   document.getElementById("gsScrim").hidden = false;
   renderGetStarted();
 }
+/* The resume versions step, aimed at one job (an id) or none. */
+function openResumeVersions(jobId){
+  if(!gs){ openGetStarted(); }
+  gs.step = "versions";
+  gs.target = typeof jobId === "string" ? jobId : "";
+  var forJob = state.resumes.filter(function(r){ return gs.target && r.job === gs.target; });
+  var pick = (forJob.length ? forJob : state.resumes)[(forJob.length ? forJob : state.resumes).length - 1];
+  gs.sel = pick ? pick.id : "profile";
+  gs.vtext = null;
+  renderGetStarted();
+}
+/* The original (the profile's resume) and the saved versions, newest first. */
+function resumeChoices(){
+  var list = state.resumes.slice().reverse();
+  if(state.profile && state.profile.resume.trim()){
+    list.push({id:"profile", label:"Original", created:state.profile.updated || "", text:state.profile.resume,
+      job:"", by:"", notes:"", base:""});
+  }
+  return list;
+}
+/* New versions arrived: show the newest unless the text there is being edited. */
+function resumesChanged(before){
+  if(!gs || gs.step !== "versions" || gs.vtext !== null) return;
+  var fresh = state.resumes.filter(function(r){ return !before[r.id]; });
+  if(fresh.length){
+    gs.sel = fresh[fresh.length-1].id;
+    toast("New resume version: " + (fresh[fresh.length-1].label || "untitled"));
+  }
+  renderGetStarted();
+}
+/* Unsaved edits in the versions step survive the first attempt to leave
+   them (switch version, go back, close): a second one drops them. Dialogs
+   like confirm() may be blocked in the artifact's frame, so none are used. */
+function dropEdits(){
+  if(!gs || gs.vtext === null || gs.warned){ if(gs) gs.warned = false; return true; }
+  gs.warned = true;
+  toast("Unsaved edits. Save them as a new version, or do that again to drop them.", true);
+  return false;
+}
+function copyResumeRequest(){
+  var v = resumeChoices().filter(function(r){ return r.id === gs.sel; })[0];
+  var j = gs.target && byId(gs.target);
+  copy("Please polish my resume in Seed Change"
+    + (j ? " for the " + j.title + " job at " + j.company + "  [" + j.id + "]" : ", in general rather than for one job")
+    + ". Start from " + (!v || v.id === "profile" ? "the original resume (the profile's resume field)"
+      : "the version \"" + v.label + "\"  [" + v.id + "]")
+    + ". Save the result as a new version in the resumes collection, with notes on what you changed and why,"
+    + " and on anything worth adding that you can't know. Keep it truthful: don't invent experience."
+    + " Don't change the profile or any other version.",
+    "Copied. Paste it into your chat with Claude.");
+}
 function closeGetStarted(skipped){
   if(skipped && !state.profile){
     if(!DEMO){ try{ localStorage.setItem(SKIP_KEY, "skipped"); }catch(e){} }
@@ -1948,7 +2021,8 @@ function renderGetStarted(){
       + '<label for="gsHeadline">Headline</label><input class="field" id="gsHeadline" autocomplete="off" placeholder="The kind of work you do or want, in one line">'
       + '<label for="gsSkills">Skills</label><textarea class="field prose" id="gsSkills"></textarea>'
       + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>';
-    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost left" id="gsReplace">Replace from a resume</button>' : '')
+    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost" id="gsReplace">Replace from a resume</button>'
+        + '<button class="btn ghost left" id="gsVersions">Resume versions</button>' : '')
       + (gs.parsedFrom || !had ? '<button class="btn" id="gsBack">Back</button>' : '')
       + '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
       + '<button class="btn primary" id="gsSave">Save profile</button>';
@@ -1960,26 +2034,119 @@ function renderGetStarted(){
     });
     var rp = document.getElementById("gsReplace");
     if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    var vs = document.getElementById("gsVersions");
+    if(vs) vs.addEventListener("click", function(){ openResumeVersions(""); });
     var bk = document.getElementById("gsBack");
     if(bk) bk.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
     document.getElementById("gsSave").addEventListener("click", saveGetStarted);
     document.getElementById("gsName").focus();
   }
 
-  else {
+  else if(gs.step === "done"){
     title.textContent = "Profile saved";
     stepEl.textContent = "";
     body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
       + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
       + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
+      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resume versions</b>.</li>'
       + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
-    foot.innerHTML = '<button class="btn primary" id="gsDone">Done</button>';
+    foot.innerHTML = '<button class="btn" id="gsVersions">Resume versions</button>'
+      + '<button class="btn primary" id="gsDone">Done</button>';
+    document.getElementById("gsVersions").addEventListener("click", function(){ openResumeVersions(""); });
     document.getElementById("gsDone").addEventListener("click", function(){ closeGetStarted(false); });
     document.getElementById("gsDone").focus();
   }
 
+  else if(gs.step === "versions") renderVersions(body, foot, title, stepEl);
+
   var skip = document.getElementById("gsSkip");
   if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
+}
+
+function renderVersions(body, foot, title, stepEl){
+  title.textContent = "Resume versions";
+  stepEl.textContent = "";
+  var choices = resumeChoices();
+  var v = choices.filter(function(r){ return r.id === gs.sel; })[0] || choices[0];
+  var open = state.jobs.filter(function(j){ return j.status !== "closed" || j.id === gs.target; })
+    .sort(function(a, b){ return a.company.localeCompare(b.company); });
+  var lead = '<p class="lead">Ask Claude to polish your resume, in general or for one job. Each result is saved'
+    + ' as a new version with notes on what changed, so nothing is lost.</p>';
+
+  if(!v){
+    body.innerHTML = lead + '<p class="qempty">There is no resume yet. Bring one in first; it becomes the original'
+      + ' that every version starts from.</p><button class="btn" id="gsToResume">Add a resume</button>';
+    foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+    document.getElementById("gsToResume").addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+    return;
+  }
+  gs.sel = v.id;
+  var job = v.job && byId(v.job), base = v.base && choices.filter(function(r){ return r.id === v.base; })[0];
+  var meta = [v.id === "profile" ? "imported with Get started" : (v.by === "claude" ? "by Claude" : "edited by you")];
+  if(v.created) meta.push(v.created.slice(0, 10));
+  if(v.job) meta.push("for " + (job ? job.company + " — " + job.title : "a job no longer here"));
+  if(base) meta.push("from " + (base.label || "an earlier version"));
+
+  body.innerHTML = lead
+    + '<label for="gsVer">Version</label><select class="field" id="gsVer">'
+    + choices.map(function(r){
+        return '<option value="' + esc(r.id) + '"' + (r.id === v.id ? " selected" : "") + '>'
+          + esc((r.label || "Untitled") + (r.created && r.id !== "profile" ? " · " + r.created.slice(0, 10) : "")) + '</option>';
+      }).join("") + '</select>'
+    + '<p class="meta">' + esc(meta.join(" · ")) + '</p>'
+    + (v.notes.trim() ? '<div class="notes"><b>Claude\'s notes</b>' + esc(v.notes) + '</div>' : '')
+    + '<label for="gsVText">Text</label><textarea class="field prose tall" id="gsVText"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsVPdf">Save PDF</button>'
+    + '<button class="btn sm" id="gsVCopy">Copy text</button>'
+    + '<button class="btn sm" id="gsVSave" hidden>Save as new version</button>'
+    + '<span class="hint" id="gsVHint"></span></div>'
+    + '<div class="ask"><label for="gsFor">Ask Claude to polish this version for</label>'
+    + '<select class="field" id="gsFor"><option value="">No particular job (general)</option>'
+    + open.map(function(j){
+        return '<option value="' + esc(j.id) + '"' + (j.id === gs.target ? " selected" : "") + '>'
+          + esc(j.company + " — " + j.title) + '</option>';
+      }).join("") + '</select>'
+    + '<div class="rowbtns"><button class="btn sm" id="gsAsk">Copy request for Claude</button>'
+    + '<span class="hint">Paste it into your chat with Claude. The new version appears here.</span></div></div>';
+  foot.innerHTML = (state.profile ? '<button class="btn ghost left" id="gsToProfile">Back to profile</button>' : '')
+    + '<button class="btn primary" id="gsClose">Close</button>';
+
+  var box = document.getElementById("gsVText"), save = document.getElementById("gsVSave");
+  box.value = gs.vtext !== null ? gs.vtext : v.text;
+  function edited(){
+    save.hidden = gs.vtext === null;
+    document.getElementById("gsVHint").textContent = gs.vtext === null ? "" : "edited, not saved";
+  }
+  edited();
+  box.addEventListener("input", function(){ gs.vtext = box.value === v.text ? null : box.value; gs.warned = false; edited(); });
+  document.getElementById("gsVer").addEventListener("change", function(e){
+    if(!dropEdits()){ e.target.value = v.id; return; }
+    gs.sel = e.target.value; gs.vtext = null; renderGetStarted();
+  });
+  document.getElementById("gsVPdf").addEventListener("click", function(){
+    makeResumePdf(box.value, job ? job.company : (v.id === "profile" ? "" : v.label));
+  });
+  document.getElementById("gsVCopy").addEventListener("click", function(){ copy(box.value, "Resume copied"); });
+  save.addEventListener("click", function(){
+    var r = {id:uid("r"), created:new Date().toISOString(), label:"Edited", job:v.job, base:v.id,
+      by:"user", text:box.value.trim(), notes:""};
+    saveResume(r);
+    gs.sel = r.id; gs.vtext = null;
+    renderGetStarted();
+    toast("Saved as a new version");
+  });
+  document.getElementById("gsFor").addEventListener("change", function(e){ gs.target = e.target.value; });
+  document.getElementById("gsAsk").addEventListener("click", copyResumeRequest);
+  var back = document.getElementById("gsToProfile");
+  if(back) back.addEventListener("click", function(){
+    if(!dropEdits()) return;
+    gs.vtext = null; gs.step = "profile"; renderGetStarted();
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    closeGetStarted(false);
+  });
 }
 
 function saveGetStarted(){
@@ -2259,7 +2426,7 @@ gsBody.addEventListener("drop", function(e){
 });
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
-    if(gs){ closeGetStarted(true); return; }
+    if(gs){ if(gs.step !== "versions" || dropEdits()) closeGetStarted(gs.step !== "versions"); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
   }
