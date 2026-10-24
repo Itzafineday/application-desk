@@ -87,7 +87,9 @@ backups.
 
 - No build step. The app is `public/index.html`; the tests read the parsers
   straight out of it.
-- Run the tests with `node --test` (Node 18 or later, nothing to install). Any
+- Run the tests with `node --test` (Node 18 or later, nothing to install).
+  GitHub runs the same tests on every pull request and on `main`
+  ([.github/workflows/tests.yml](.github/workflows/tests.yml)). Any
   change to the paste parser, the resume reader or the form question splitter
   needs a fixture in `tests/fixtures/`, and fixtures are always invented, never
   a real posting, resume or form.
