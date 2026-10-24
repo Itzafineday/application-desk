@@ -136,6 +136,11 @@ In the page itself:
 Once a week, click **Export backup** at the top of the page and save the file
 somewhere safe. If anything goes wrong, **Import** puts everything back.
 
+## Updating
+
+When there's a new release, ask Claude to update your page; your data stays
+where it is. [UPDATING.md](UPDATING.md) has the message to send.
+
 ## Getting help
 
 If something doesn't work, describe it to Claude in the Code tab, for example:
