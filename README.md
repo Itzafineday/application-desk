@@ -27,6 +27,10 @@ page updates live.
   and experience, which you check before saving. Claude uses it for fit scores,
   letters and application answers. It opens by itself once when there is no
   profile yet, and every step can be skipped.
+- **Polish the resume.** Under **Profile → Resume versions**, or **Tailor
+  resume** on a job's letter, ask Claude to polish your resume in general or
+  for one job. Each result is a new version with Claude's notes on what
+  changed, so nothing is lost, and any version saves as a PDF.
 - **Help me apply.** For company sites with their own long application form,
   paste its questions into the job's Help me apply tab. Ask Claude in chat and
   it drafts an answer to each one from your profile, for you to check and copy

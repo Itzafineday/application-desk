@@ -300,6 +300,18 @@ textarea.note{min-height:110px;font-size:13px}
 .gs .foot .left{margin-right:auto}
 .gs ul{margin:0;padding-left:18px;line-height:1.75}
 .gs .body.drop{outline:2px dashed var(--accent-line);outline-offset:-8px}
+.gs select.field{
+  width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:6px 8px;font-size:13px;
+}
+.gs .meta{font-size:11.5px;color:var(--muted);margin:6px 0 0;font-family:"IBM Plex Mono",monospace}
+.gs .notes{
+  white-space:pre-wrap;font-size:12.5px;line-height:1.6;margin:10px 0 0;padding:8px 11px;
+  background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius);
+}
+.gs .notes b{display:block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+.gs .rowbtns{align-items:center}
+.gs .ask{margin-top:18px;padding-top:12px;border-top:1px solid var(--line-soft)}
 
 /* ---------- toast ---------- */
 .toast{
@@ -427,6 +439,8 @@ var FIELDS = ["company","title","band","location","url","source","posted","appli
 /* The profile is one document, filled in by Get started or by Claude. These
    fields are plain text; any others a document carries are kept as they are. */
 var PROFILE_TEXT = ["name","headline","skills","experience","resume"];
+/* Resume versions: one document each, never changed once saved. */
+var RESUME_TEXT = ["id","created","label","job","text","notes","by","base"];
 
 /* Inside claude.ai the platform sets window.claude before this script runs.
    Anywhere else (a local server, another host) the page is a demo that loads
@@ -436,10 +450,12 @@ var DEMO = !(window.claude && window.claude.use);
 var store = null;          // the active store; null until connect() picks one
 var pending = {};          // id -> fields changed here and not yet written
 var profilePending = null; // profile fields changed here and not yet written
+var resumesPending = [];   // resume versions made here and not yet written
 var flushTimer = null, cacheTimer = null;
 
 var state = normalize({jobs: DEMO ? [] : (readLocal(CACHE_KEY) || readLocal(V2_KEY) || [])});
 state.profile = DEMO ? null : readCachedProfile();   // null until there is one
+state.resumes = DEMO ? [] : readCachedResumes();     // oldest first
 var ui = {sort:"smart", dir:1, filter:"all", q:"", sel:null, tab:"brief"};
 
 function readLocal(key){
@@ -455,6 +471,22 @@ function readCachedProfile(){
     var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     return p ? normProfile(p.profile) : null;
   }catch(e){ return null; }
+}
+function readCachedResumes(){
+  try{
+    var p = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    return normResumes(p && p.resumes);
+  }catch(e){ return []; }
+}
+/* Resume versions with their text fields as strings, oldest first. */
+function normResumes(list){
+  return (Array.isArray(list) ? list : []).filter(function(r){
+    return r && typeof r === "object" && r.id;
+  }).map(function(r){
+    var o = JSON.parse(JSON.stringify(r));
+    RESUME_TEXT.forEach(function(f){ o[f] = typeof o[f] === "string" ? o[f] : ""; });
+    return o;
+  }).sort(function(a, b){ return a.created < b.created ? -1 : a.created > b.created ? 1 : 0; });
 }
 /* A profile document, with its text fields as strings, or null for none. */
 function normProfile(p){
@@ -500,7 +532,7 @@ function cacheLocal(){
   if(DEMO) return;                      // sample jobs never enter the cache
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(function(){
-    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile})); }catch(e){}
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify({version:3, jobs:state.jobs, profile:state.profile, resumes:state.resumes})); }catch(e){}
   }, 500);
 }
 function setSync(s){
@@ -559,6 +591,18 @@ function flushProfile(){
   var f = profilePending; profilePending = null;
   store.updateProfile(f, JSON.parse(JSON.stringify(state.profile))).catch(writeFailed);
 }
+/* Add one resume version. Versions are never changed, so this is a create. */
+function saveResume(r){
+  state.resumes = normResumes(state.resumes.concat([r]));
+  resumesPending.push(r);
+  cacheLocal();
+  flushResumes();
+}
+function flushResumes(){
+  if(!store) return;                    // stays pending until a store is ready
+  var list = resumesPending; resumesPending = [];
+  list.forEach(function(r){ store.putResume(JSON.parse(JSON.stringify(r))).catch(writeFailed); });
+}
 function writeFailed(e){
   var code = e && e.code;
   if(code === "quota_exceeded") toast("The job list is full. Delete some closed postings, then try again.", true);
@@ -570,12 +614,13 @@ function writeFailed(e){
 /* Every store has the same shape, so nothing outside this section knows
    where the jobs and the profile are kept:
      kind                     "live", "local" or "demo"; drives the sync badge
-     start(onJobs, onLost, onProfile)
+     start(onJobs, onLost, onProfile, onResumes)
                               deliver the whole job list now and after every
-                              change, as onJobs(jobs, fromCache), and the
+                              change, as onJobs(jobs, fromCache), the
                               profile the same way, as onProfile(profile or
-                              null, fromCache); call onLost(err) if the
-                              connection drops for good
+                              null, fromCache), and the resume versions as
+                              onResumes(versions, fromCache); call
+                              onLost(err) if the connection drops for good
      update(id, fields, job)  merge some fields into one job; `job` is the
                               whole job, for a store that must create it  -> Promise
      put(job)                 create or replace one job                   -> Promise
@@ -583,10 +628,12 @@ function writeFailed(e){
      updateProfile(fields, profile)
                               merge some fields into the profile; `profile`
                               is the whole profile, for creating it       -> Promise
+     putResume(version)       create one resume version                   -> Promise
    A hosted backend later is one more function returning this shape. */
 
 /* The artifact's shared database (the claude.ai "db" capability). The jobs
-   are the `jobs` collection; the profile is the one document `profile/me`. */
+   are the `jobs` collection; the profile is the one document `profile/me`;
+   resume versions are the `resumes` collection, one document each. */
 function artifactStore(db){
   function ref(id){ return db.doc("jobs/" + id); }
   function put(j){ return retry(function(){ return ref(j.id).set(j); }); }
@@ -618,10 +665,17 @@ function artifactStore(db){
 
   return {
     kind: "live",
-    start: function(onJobs, onLost, onProfile){
+    start: function(onJobs, onLost, onProfile, onResumes){
       profileRef().onSnapshot(function(snap){
         onProfile(snap.exists ? JSON.parse(JSON.stringify(snap.data() || {})) : null,
           snap.metadata.fromCache);
+      }, onLost);
+      db.collection("resumes").limit(1000).onSnapshot(function(snap){
+        onResumes(snap.docs.map(function(d){
+          var o = JSON.parse(JSON.stringify(d.data() || {}));
+          o.id = d.id;
+          return o;
+        }), snap.metadata.fromCache);
       }, onLost);
       migrate().then(null, function(){
         toast("Some postings did not move across yet. Reload to try again.", true);
@@ -650,7 +704,8 @@ function artifactStore(db){
         }
         throw e;
       });
-    }
+    },
+    putResume: function(r){ return retry(function(){ return db.doc("resumes/" + r.id).set(r); }); }
   };
 }
 
@@ -658,25 +713,27 @@ function artifactStore(db){
    which cacheLocal() keeps current, so a write has nothing left to do. */
 function browserStore(){
   function done(){ return Promise.resolve(); }
-  return {kind:"local", start:function(){}, update:done, put:done, remove:done, updateProfile:done};
+  return {kind:"local", start:function(){}, update:done, put:done, remove:done,
+    updateProfile:done, putResume:done};
 }
 
-/* Fictional jobs and profile for trying the page outside claude.ai. Edits
+/* Fictional jobs, profile and resume versions for trying the page outside claude.ai. Edits
    stay in the page's memory until it reloads. */
 function demoStore(url){
   function done(){ return Promise.resolve(); }
   return {
     kind: "demo",
-    start: function(onJobs, onLost, onProfile){
+    start: function(onJobs, onLost, onProfile, onResumes){
       fetch(url).then(function(r){
         if(!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).then(function(data){
         onProfile((data && data.profile) || null, false);
+        onResumes((data && data.resumes) || [], false);
         onJobs((data && data.jobs) || [], false);
       }, onLost);
     },
-    update: done, put: done, remove: done, updateProfile: done
+    update: done, put: done, remove: done, updateProfile: done, putResume: done
   };
 }
 
@@ -735,6 +792,18 @@ function useStore(s){
     renderProfileButton();
     if(!fromCache) offerOnboarding();
     flushProfile();
+  }, function(list, fromCache){
+    if(store !== s) return;
+    if(!list.length && fromCache && state.resumes.length) return;
+    var have = {};
+    list.forEach(function(r){ have[r.id] = 1; });
+    resumesPending.forEach(function(r){ if(!have[r.id]) list.push(r); });   // not confirmed yet
+    var before = {};
+    state.resumes.forEach(function(r){ before[r.id] = 1; });
+    state.resumes = normResumes(list);
+    cacheLocal();
+    resumesChanged(before);
+    flushResumes();
   });
 }
 function uid(co){
@@ -956,6 +1025,7 @@ function renderTab(){
       + '<button class="btn primary sm" id="btnPdf">Save PDF</button>'
       + '<button class="btn sm" id="btnCopyL">Copy text</button>'
       + '<button class="btn sm" id="btnDash">Fix em dashes</button>'
+      + '<button class="btn ghost sm" id="btnTailor">Tailor resume</button>'
       + '<span class="hint" id="lHint"></span></div>';
     var lb = document.getElementById("letterBox");
     lb.value = j.letter || "";
@@ -977,6 +1047,7 @@ function renderTab(){
       copy(lb.value, "Letter copied");
     });
     document.getElementById("btnPdf").addEventListener("click", function(){ makePdf(j, lb.value); });
+    document.getElementById("btnTailor").addEventListener("click", function(){ openResumeVersions(j.id); });
   }
 
   else if(ui.tab === "questions"){
@@ -1213,6 +1284,85 @@ function makePdf(j, text){
         "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
 }
 
+/* A resume lays out in a plainer type than the letter, and may run to a
+   second page: the tighter sets are tried first to keep it to one, then it
+   spills at the most readable set. */
+var RESUME_METRICS = [
+  {size:10.5, lead:14,   gap:7, head:14, margin:54, name:20},
+  {size:10,   lead:13,   gap:6, head:12, margin:48, name:19},
+  {size:9.5,  lead:12.2, gap:5, head:11, margin:44, name:18}
+];
+function layoutResume(doc, blocks, m){
+  var W = 612 - m.margin*2, y = m.margin, ops = [];
+  function wrap(s, x, w, style){
+    doc.setFont("helvetica", style || "normal").setFontSize(m.size);
+    doc.splitTextToSize(s, w).forEach(function(t){ ops.push({t:"text", s:t, x:x, y:y, size:m.size, style:style}); y += m.lead; });
+  }
+  blocks.forEach(function(b, i){
+    var next = blocks[i+1];
+    if(b.t === "name"){
+      ops.push({t:"text", s:b.s, x:m.margin, y:y + m.name*0.2, size:m.name, style:"bold"});
+      y += m.name + 2;
+    } else if(b.t === "sub"){
+      doc.setFont("helvetica", "normal").setFontSize(m.size - 1);
+      doc.splitTextToSize(b.s, W).forEach(function(t){ ops.push({t:"text", s:t, x:m.margin, y:y, size:m.size - 1, grey:true}); y += m.lead - 1; });
+      if(!next || next.t !== "sub"){ y += 2; ops.push({t:"rule", x:m.margin, y:y, w:W}); y += m.head; }
+    } else if(b.t === "heading"){
+      if(i && blocks[i-1].t !== "gap" && blocks[i-1].t !== "sub") y += m.gap;
+      ops.push({t:"text", s:b.s.toUpperCase(), x:m.margin, y:y, size:m.size, style:"bold", keep:true});
+      y += 3;
+      ops.push({t:"rule", x:m.margin, y:y, w:W, light:true});
+      y += m.lead;
+    } else if(b.t === "bullet"){
+      ops.push({t:"text", s:"•", x:m.margin + 2, y:y, size:m.size});
+      wrap(b.s, m.margin + 13, W - 13);
+    } else if(b.t === "line"){
+      // A role's title: first after a heading or gap, with a line and then bullets under it.
+      var prev = blocks[i-1], role = prev && (prev.t === "heading" || prev.t === "gap")
+        && next && next.t === "line" && blocks[i+2] && blocks[i+2].t === "bullet";
+      var at = ops.length;
+      wrap(b.s, m.margin, W, role ? "bold" : "normal");
+      if(role) ops[at].keep = true;
+    } else y += m.gap;
+  });
+  return {ops:ops, height:y, margin:m.margin};
+}
+function makeResumePdf(text, name){
+  var blocks = resumeBlocks(text);
+  if(!blocks.length){ toast("Nothing to export", true); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    toast("PDF library did not load — copy the text instead", true); return;
+  }
+  var doc = new window.jspdf.jsPDF({unit:"pt", format:"letter"}), laid = null;
+  for(var i=0;i<RESUME_METRICS.length;i++){
+    laid = layoutResume(doc, blocks, RESUME_METRICS[i]);
+    if(laid.height <= 792 - laid.margin) break;                 // fits one page
+  }
+  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0]);
+
+  var pageBottom = 792 - laid.margin, offsetY = 0;
+  laid.ops.forEach(function(op){
+    var y = op.y - offsetY;
+    // A heading or a role's title never ends a page: it moves over with the lines under it.
+    if(y > pageBottom || (op.keep && y + 3*RESUME_METRICS[0].lead > pageBottom)){
+      doc.addPage();
+      offsetY = op.y - laid.margin;
+      y = laid.margin;
+    }
+    if(op.t === "rule"){
+      doc.setDrawColor(op.light ? 200 : 160).setLineWidth(op.light ? .5 : .8).line(op.x, y, op.x + op.w, y);
+    } else {
+      doc.setFont("helvetica", op.style || "normal").setFontSize(op.size).setTextColor(op.grey ? 80 : 0);
+      doc.text(op.s, op.x, y);
+    }
+  });
+  doc.setTextColor(0);
+  var who = nameCase(String(blocks[0].s)).replace(/[^A-Za-z0-9]+/g, "");
+  var slug = String(name || "").replace(/[^A-Za-z0-9]+/g, "");
+  offer((who ? who + "_" : "") + "Resume" + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
+        "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
+}
+
 /* ============================ save / load ============================ */
 var downloadsCap = null, capReady = false;
 if(window.claude && window.claude.use){
@@ -1245,7 +1395,8 @@ function offer(filename, data, okMsg){
   toast("Saving files is not available in this view", true);
 }
 function saveState(){
-  var payload = JSON.stringify({version:3, exported:today(), profile:state.profile, jobs:state.jobs}, null, 2);
+  var payload = JSON.stringify({version:3, exported:today(), profile:state.profile,
+    resumes:state.resumes, jobs:state.jobs}, null, 2);
   offer("application-desk-backup-" + today() + ".json", payload, "Backup exported");
 }
 function loadFile(file){
@@ -1263,8 +1414,17 @@ function loadFile(file){
       });
       var withProfile = profileHasText(parsed.profile);
       if(withProfile) saveProfile(normProfile(parsed.profile));
+      // Versions never change, so only ones not here yet are added.
+      var known = {};
+      state.resumes.forEach(function(r){ known[r.id] = 1; });
+      var versions = normResumes(parsed.resumes).filter(function(r){ return !known[r.id]; });
+      versions.forEach(saveResume);
       ui.sel = null; renderAll();
-      toast("Imported " + incoming.length + " postings" + (withProfile ? " and the profile" : ""));
+      var parts = [incoming.length + " postings"];
+      if(withProfile) parts.push("the profile");
+      if(versions.length) parts.push(versions.length + " resume version" + (versions.length > 1 ? "s" : ""));
+      var last = parts.pop();
+      toast("Imported " + (parts.length ? parts.join(", ") + " and " : "") + last);
     }catch(e){
       toast("That file is not a Seed Change backup", true);
     }
@@ -1665,6 +1825,33 @@ function parseResume(text){
   }
   return out;
 }
+/* Resume text as blocks for the PDF: the name (the first line), the lines
+   right under it, then headings, bullets and plain lines, with a gap for each
+   run of blank lines. A heading is one the reader knows or a short line in
+   capitals. */
+function resumeBlocks(text){
+  var lines = String(text || "").replace(/\r/g, "").split("\n").map(function(l){
+    return l.replace(/\s+/g, " ").trim();
+  });
+  var out = [], i = 0;
+  while(i < lines.length && !lines[i]) i++;
+  if(i >= lines.length) return out;
+  function heading(l){ return resumeHeading(l) || /^[A-Z][A-Z &\/'-]{3,39}$/.test(l); }
+  out.push({t:"name", s:lines[i++]});
+  // A line in capitals straight under the name is a headline, not a heading.
+  for(; i < lines.length && lines[i] && !resumeHeading(lines[i]) && !BULLET.test(lines[i])
+        && !(out.length > 1 && heading(lines[i])); i++) out.push({t:"sub", s:lines[i]});
+  for(; i < lines.length; i++){
+    var l = lines[i], last = out[out.length-1];
+    if(!l){ if(last.t !== "gap") out.push({t:"gap"}); continue; }
+    if(BULLET_ONLY.test(l)) continue;
+    if(heading(l)) out.push({t:"heading", s:l.replace(/:$/, "")});
+    else if(BULLET.test(l)) out.push({t:"bullet", s:l.replace(BULLET, "")});
+    else out.push({t:"line", s:l});
+  }
+  while(out[out.length-1].t === "gap") out.pop();
+  return out;
+}
 /* One page of pdf.js text items as lines: a new line wherever the baseline
    moves or pdf.js marks an end of line, and a space where items have a gap. */
 function pdfPageText(items){
@@ -1712,6 +1899,57 @@ function openGetStarted(){
     f: {name:p.name||"", headline:p.headline||"", skills:p.skills||"", experience:p.experience||""}};
   document.getElementById("gsScrim").hidden = false;
   renderGetStarted();
+}
+/* The resume versions step, aimed at one job (an id) or none. */
+function openResumeVersions(jobId){
+  if(!gs){ openGetStarted(); }
+  gs.step = "versions";
+  gs.target = typeof jobId === "string" ? jobId : "";
+  var forJob = state.resumes.filter(function(r){ return gs.target && r.job === gs.target; });
+  var pick = (forJob.length ? forJob : state.resumes)[(forJob.length ? forJob : state.resumes).length - 1];
+  gs.sel = pick ? pick.id : "profile";
+  gs.vtext = null;
+  renderGetStarted();
+}
+/* The original (the profile's resume) and the saved versions, newest first. */
+function resumeChoices(){
+  var list = state.resumes.slice().reverse();
+  if(state.profile && state.profile.resume.trim()){
+    list.push({id:"profile", label:"Original", created:state.profile.updated || "", text:state.profile.resume,
+      job:"", by:"", notes:"", base:""});
+  }
+  return list;
+}
+/* New versions arrived: show the newest unless the text there is being edited. */
+function resumesChanged(before){
+  if(!gs || gs.step !== "versions" || gs.vtext !== null) return;
+  var fresh = state.resumes.filter(function(r){ return !before[r.id]; });
+  if(fresh.length){
+    gs.sel = fresh[fresh.length-1].id;
+    toast("New resume version: " + (fresh[fresh.length-1].label || "untitled"));
+  }
+  renderGetStarted();
+}
+/* Unsaved edits in the versions step survive the first attempt to leave
+   them (switch version, go back, close): a second one drops them. Dialogs
+   like confirm() may be blocked in the artifact's frame, so none are used. */
+function dropEdits(){
+  if(!gs || gs.vtext === null || gs.warned){ if(gs) gs.warned = false; return true; }
+  gs.warned = true;
+  toast("Unsaved edits. Save them as a new version, or do that again to drop them.", true);
+  return false;
+}
+function copyResumeRequest(){
+  var v = resumeChoices().filter(function(r){ return r.id === gs.sel; })[0];
+  var j = gs.target && byId(gs.target);
+  copy("Please polish my resume in Seed Change"
+    + (j ? " for the " + j.title + " job at " + j.company + "  [" + j.id + "]" : ", in general rather than for one job")
+    + ". Start from " + (!v || v.id === "profile" ? "the original resume (the profile's resume field)"
+      : "the version \"" + v.label + "\"  [" + v.id + "]")
+    + ". Save the result as a new version in the resumes collection, with notes on what you changed and why,"
+    + " and on anything worth adding that you can't know. Keep it truthful: don't invent experience."
+    + " Don't change the profile or any other version.",
+    "Copied. Paste it into your chat with Claude.");
 }
 function closeGetStarted(skipped){
   if(skipped && !state.profile){
@@ -1783,7 +2021,8 @@ function renderGetStarted(){
       + '<label for="gsHeadline">Headline</label><input class="field" id="gsHeadline" autocomplete="off" placeholder="The kind of work you do or want, in one line">'
       + '<label for="gsSkills">Skills</label><textarea class="field prose" id="gsSkills"></textarea>'
       + '<label for="gsExp">Experience</label><textarea class="field prose tall" id="gsExp"></textarea>';
-    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost left" id="gsReplace">Replace from a resume</button>' : '')
+    foot.innerHTML = (had && !gs.parsedFrom ? '<button class="btn ghost" id="gsReplace">Replace from a resume</button>'
+        + '<button class="btn ghost left" id="gsVersions">Resume versions</button>' : '')
       + (gs.parsedFrom || !had ? '<button class="btn" id="gsBack">Back</button>' : '')
       + '<button class="btn ghost" id="gsSkip">' + (had ? "Cancel" : "Skip for now") + '</button>'
       + '<button class="btn primary" id="gsSave">Save profile</button>';
@@ -1795,26 +2034,119 @@ function renderGetStarted(){
     });
     var rp = document.getElementById("gsReplace");
     if(rp) rp.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    var vs = document.getElementById("gsVersions");
+    if(vs) vs.addEventListener("click", function(){ openResumeVersions(""); });
     var bk = document.getElementById("gsBack");
     if(bk) bk.addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
     document.getElementById("gsSave").addEventListener("click", saveGetStarted);
     document.getElementById("gsName").focus();
   }
 
-  else {
+  else if(gs.step === "done"){
     title.textContent = "Profile saved";
     stepEl.textContent = "";
     body.innerHTML = '<p class="lead">Claude can use it from now on. Some things to try:</p><ul>'
       + '<li>In chat, ask Claude to score the queued jobs in Seed Change against your profile.</li>'
       + '<li>When a company site has its own application form, open the job and use <b>Help me apply</b>.</li>'
+      + '<li>Have Claude polish your resume, in general or for one job, under <b>Resume versions</b>.</li>'
       + '<li>Change your profile any time from <b>Profile</b> at the top.</li></ul>';
-    foot.innerHTML = '<button class="btn primary" id="gsDone">Done</button>';
+    foot.innerHTML = '<button class="btn" id="gsVersions">Resume versions</button>'
+      + '<button class="btn primary" id="gsDone">Done</button>';
+    document.getElementById("gsVersions").addEventListener("click", function(){ openResumeVersions(""); });
     document.getElementById("gsDone").addEventListener("click", function(){ closeGetStarted(false); });
     document.getElementById("gsDone").focus();
   }
 
+  else if(gs.step === "versions") renderVersions(body, foot, title, stepEl);
+
   var skip = document.getElementById("gsSkip");
   if(skip) skip.addEventListener("click", function(){ closeGetStarted(true); });
+}
+
+function renderVersions(body, foot, title, stepEl){
+  title.textContent = "Resume versions";
+  stepEl.textContent = "";
+  var choices = resumeChoices();
+  var v = choices.filter(function(r){ return r.id === gs.sel; })[0] || choices[0];
+  var open = state.jobs.filter(function(j){ return j.status !== "closed" || j.id === gs.target; })
+    .sort(function(a, b){ return a.company.localeCompare(b.company); });
+  var lead = '<p class="lead">Ask Claude to polish your resume, in general or for one job. Each result is saved'
+    + ' as a new version with notes on what changed, so nothing is lost.</p>';
+
+  if(!v){
+    body.innerHTML = lead + '<p class="qempty">There is no resume yet. Bring one in first; it becomes the original'
+      + ' that every version starts from.</p><button class="btn" id="gsToResume">Add a resume</button>';
+    foot.innerHTML = '<button class="btn primary" id="gsClose">Close</button>';
+    document.getElementById("gsToResume").addEventListener("click", function(){ gs.step = "resume"; renderGetStarted(); });
+    document.getElementById("gsClose").addEventListener("click", function(){ closeGetStarted(false); });
+    return;
+  }
+  gs.sel = v.id;
+  var job = v.job && byId(v.job), base = v.base && choices.filter(function(r){ return r.id === v.base; })[0];
+  var meta = [v.id === "profile" ? "imported with Get started" : (v.by === "claude" ? "by Claude" : "edited by you")];
+  if(v.created) meta.push(v.created.slice(0, 10));
+  if(v.job) meta.push("for " + (job ? job.company + " — " + job.title : "a job no longer here"));
+  if(base) meta.push("from " + (base.label || "an earlier version"));
+
+  body.innerHTML = lead
+    + '<label for="gsVer">Version</label><select class="field" id="gsVer">'
+    + choices.map(function(r){
+        return '<option value="' + esc(r.id) + '"' + (r.id === v.id ? " selected" : "") + '>'
+          + esc((r.label || "Untitled") + (r.created && r.id !== "profile" ? " · " + r.created.slice(0, 10) : "")) + '</option>';
+      }).join("") + '</select>'
+    + '<p class="meta">' + esc(meta.join(" · ")) + '</p>'
+    + (v.notes.trim() ? '<div class="notes"><b>Claude\'s notes</b>' + esc(v.notes) + '</div>' : '')
+    + '<label for="gsVText">Text</label><textarea class="field prose tall" id="gsVText"></textarea>'
+    + '<div class="rowbtns"><button class="btn primary sm" id="gsVPdf">Save PDF</button>'
+    + '<button class="btn sm" id="gsVCopy">Copy text</button>'
+    + '<button class="btn sm" id="gsVSave" hidden>Save as new version</button>'
+    + '<span class="hint" id="gsVHint"></span></div>'
+    + '<div class="ask"><label for="gsFor">Ask Claude to polish this version for</label>'
+    + '<select class="field" id="gsFor"><option value="">No particular job (general)</option>'
+    + open.map(function(j){
+        return '<option value="' + esc(j.id) + '"' + (j.id === gs.target ? " selected" : "") + '>'
+          + esc(j.company + " — " + j.title) + '</option>';
+      }).join("") + '</select>'
+    + '<div class="rowbtns"><button class="btn sm" id="gsAsk">Copy request for Claude</button>'
+    + '<span class="hint">Paste it into your chat with Claude. The new version appears here.</span></div></div>';
+  foot.innerHTML = (state.profile ? '<button class="btn ghost left" id="gsToProfile">Back to profile</button>' : '')
+    + '<button class="btn primary" id="gsClose">Close</button>';
+
+  var box = document.getElementById("gsVText"), save = document.getElementById("gsVSave");
+  box.value = gs.vtext !== null ? gs.vtext : v.text;
+  function edited(){
+    save.hidden = gs.vtext === null;
+    document.getElementById("gsVHint").textContent = gs.vtext === null ? "" : "edited, not saved";
+  }
+  edited();
+  box.addEventListener("input", function(){ gs.vtext = box.value === v.text ? null : box.value; gs.warned = false; edited(); });
+  document.getElementById("gsVer").addEventListener("change", function(e){
+    if(!dropEdits()){ e.target.value = v.id; return; }
+    gs.sel = e.target.value; gs.vtext = null; renderGetStarted();
+  });
+  document.getElementById("gsVPdf").addEventListener("click", function(){
+    makeResumePdf(box.value, job ? job.company : (v.id === "profile" ? "" : v.label));
+  });
+  document.getElementById("gsVCopy").addEventListener("click", function(){ copy(box.value, "Resume copied"); });
+  save.addEventListener("click", function(){
+    var r = {id:uid("r"), created:new Date().toISOString(), label:"Edited", job:v.job, base:v.id,
+      by:"user", text:box.value.trim(), notes:""};
+    saveResume(r);
+    gs.sel = r.id; gs.vtext = null;
+    renderGetStarted();
+    toast("Saved as a new version");
+  });
+  document.getElementById("gsFor").addEventListener("change", function(e){ gs.target = e.target.value; });
+  document.getElementById("gsAsk").addEventListener("click", copyResumeRequest);
+  var back = document.getElementById("gsToProfile");
+  if(back) back.addEventListener("click", function(){
+    if(!dropEdits()) return;
+    gs.vtext = null; gs.step = "profile"; renderGetStarted();
+  });
+  document.getElementById("gsClose").addEventListener("click", function(){
+    if(!dropEdits()) return;
+    closeGetStarted(false);
+  });
 }
 
 function saveGetStarted(){
@@ -2094,7 +2426,7 @@ gsBody.addEventListener("drop", function(e){
 });
 document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
-    if(gs){ closeGetStarted(true); return; }
+    if(gs){ if(gs.step !== "versions" || dropEdits()) closeGetStarted(gs.step !== "versions"); return; }
     if(!document.getElementById("addScrim").hidden){ document.getElementById("addScrim").hidden = true; return; }
     if(ui.sel){ ui.sel = null; renderRows(); renderDrawer(); }
   }

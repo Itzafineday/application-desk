@@ -41,7 +41,7 @@ test("Backup: packs the jobs and the profile into one export", () => {
   const dir = listing({ ...JOBS, "profile/me.json": PROFILE });
   const r = pack(dir, "--profile", path.join(dir, "profile"), "--date", "2026-10-24");
   assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /Backed up 2 jobs and the profile to application-desk-backup-2026-10-24\.json/);
+  assert.match(r.out, /Backed up 2 jobs, the profile and 0 resume versions to application-desk-backup-2026-10-24\.json/);
   const b = backup(dir, "2026-10-24");
   assert.equal(b.version, 3);
   assert.equal(b.exported, "2026-10-24");
@@ -56,7 +56,7 @@ test("Backup: no profile yet writes null, and losing one since the last backup w
   const r = pack(dir, "--profile", path.join(dir, "profile"), "--date", "2026-10-24");
   assert.equal(r.code, 0, r.out);
   assert.equal(backup(dir, "2026-10-24").profile, null);
-  assert.match(r.out, /2 jobs without a profile/);
+  assert.match(r.out, /2 jobs, no profile and/);
   assert.match(r.out, /WARNING: application-desk-backup-2026-10-23\.json has a profile and this backup doesn't\./);
   // without --profile at all, the warning says so (the same day again, so 10-23 is still the previous one)
   assert.match(pack(dir, "--date", "2026-10-24").out, /doesn't \(no --profile given\)/);
@@ -78,4 +78,21 @@ test("Backup: an empty job listing still writes nothing", () => {
   assert.equal(r.code, 1);
   assert.match(r.out, /no jobs in .*nothing written, nothing deleted/);
   assert.equal(fs.existsSync(path.join(dir, "backups")), false);
+});
+
+test("Backup: resume versions go in oldest first, and losing some warns", () => {
+  const v = (id, created) => ({ created, label: "Polish " + id, job: "", base: "profile", by: "claude", text: "Pat Example", notes: "" });
+  const dir = listing({ ...JOBS, "resumes/r-bbbbbbb.json": v("b", "2026-10-22T10:00:00.000Z"),
+    "resumes/r-aaaaaaa.json": v("a", "2026-10-23T10:00:00.000Z") });
+  const r = pack(dir, "--resumes", path.join(dir, "resumes"), "--date", "2026-10-23");
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /2 jobs, no profile and 2 resume versions/);
+  assert.deepEqual(backup(dir, "2026-10-23").resumes.map((x) => x.id), ["r-bbbbbbb", "r-aaaaaaa"]);
+  fs.rmSync(path.join(dir, "resumes"), { recursive: true });       // the next listing has none
+  const again = pack(dir, "--resumes", path.join(dir, "resumes"), "--date", "2026-10-24");
+  assert.equal(again.code, 0, again.out);
+  assert.deepEqual(backup(dir, "2026-10-24").resumes, []);
+  assert.match(again.out, /WARNING: resume versions fell from 2 to 0; versions are never deleted\./);
+  const broken = listing({ ...JOBS, "resumes/r-x.json": "[]" });
+  assert.match(pack(broken, "--resumes", path.join(broken, "resumes")).out, /r-x\.json is not a resume version object/);
 });

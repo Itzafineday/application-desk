@@ -9,15 +9,16 @@ and record the change here.
 - **Shared database** (the record): the artifact's `db`, collection `jobs`,
   one document per job. The document id is the job id. The page subscribes to
   the whole collection (up to 1,000 documents). The profile is one more
-  document, `profile/me` (collection `profile`, id `me`), which the page
-  subscribes to as well.
+  document, `profile/me` (collection `profile`, id `me`), and each resume
+  version is a document in the `resumes` collection. The page subscribes to
+  both as well.
 - **Browser cache**: `localStorage["appdesk.v3.cache"]` holds
-  `{ version: 3, jobs, profile }` so the page can draw before the database
+  `{ version: 3, jobs, profile, resumes }` so the page can draw before the database
   answers. It is never the record.
 - **Get started**: `localStorage["appdesk.v4.getstarted"] = "skipped"`
   remembers that Get started was skipped in this browser, so it doesn't open
   by itself again. It is not data and is never exported.
-- **Demo** (outside claude.ai): jobs and the profile come from
+- **Demo** (outside claude.ai): jobs, the profile and resume versions come from
   `public/sample-data.json` and stay in memory. Nothing is written to the
   cache.
 - **Legacy**: `localStorage["appdesk.v2"]` is the v2 record. v3 reads it once,
@@ -130,6 +131,45 @@ there is none), so fields Claude adds are kept. Claude should pin writes to
 the version it read, as for jobs, and leave `resume` alone: it is the source
 text the other fields came from.
 
+## Resume versions
+
+The resume polisher's versions: collection `resumes`, one document per
+version, document id = version id. The resume imported by Get started is
+not a version; it stays in the profile's `resume` field and counts as the
+original. A version is never changed once saved: polishing it, or editing it
+in the page, saves a new one.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string | Same as the document id: `"r-"` plus 7 random base-36 characters. |
+| `created` | string | ISO 8601 timestamp. Versions are listed in this order. |
+| `label` | string | A short name: `"General polish"`, `"For Acme Example"`, `"Edited"`. |
+| `job` | string | The id of the job it was tailored for, or `""` for a general version. |
+| `base` | string | The version it was made from: a version id, or `"profile"` for the imported resume. |
+| `by` | string | `"claude"` or `"user"` (edited and saved in the page). |
+| `text` | string | The whole resume as plain text. |
+| `notes` | string | Claude's notes: what changed and why, and anything worth adding that it can't know. `""` for the owner's own versions. |
+
+### Resume text
+
+The resume PDF reads its structure from the plain text, the way the letter's
+does:
+
+- The first line is the name, set large and bold, and used in the PDF
+  filename. The lines right under it (headline, contact line) are set small
+  and grey, up to the first blank line, heading or bullet; then a rule.
+- A heading is one the resume reader knows ("Experience", "Skills",
+  "Education" and so on, any case, with or without a colon) or a short line
+  in capitals. It is set bold in capitals with a light rule under it.
+- A line starting with a bullet mark (`•`, `-`, `*` and similar) is a bullet,
+  set with a hanging indent. Other lines wrap as plain text. A blank line
+  adds a little space.
+- It keeps to one page when one of three type settings fits, and otherwise
+  runs onto a second page, never leaving a heading at the bottom of a page.
+
+Claude adds a version with ArtifactData `set` on a new id. It never changes or
+deletes a version, and never changes the profile's `resume` while polishing.
+
 ## Export file
 
 "Export backup" saves, and "Import" reads, this shape:
@@ -139,6 +179,7 @@ text the other fields came from.
   "version": 3,
   "exported": "2026-10-14",
   "profile": { "name": "", "headline": "", "skills": "", "experience": "", "resume": "" },
+  "resumes": [ ],
   "jobs": [ ]
 }
 ```
@@ -152,6 +193,9 @@ text the other fields came from.
   without a headline, skills, experience or resume text. An imported profile
   replaces the fields it has. The letter text still holds the writer's name
   and contact line for the PDF.
-- Import merges by `id`: a job with a matching id is replaced, others are added.
+- `resumes` holds the resume versions (above), oldest first.
+  `scripts/pack-backup.js` writes them from a listing of `resumes` when given
+  `--resumes`. Exports from before the polisher have none. Import adds the versions not already there, by `id`.
+- Import merges jobs by `id`: a job with a matching id is replaced, others are added.
 
-`public/sample-data.json` uses the export shape, with fictional jobs only.
+`public/sample-data.json` uses the export shape, with fictional data only.

@@ -8,9 +8,9 @@ const fs = require("fs");
 const path = require("path");
 const { loadSection } = require("./load-parser");
 
-const { parseResume, pdfPageText } = loadSection(
+const { parseResume, pdfPageText, resumeBlocks } = loadSection(
   "/* ============================ resume reader", "/* ============================ get started",
-  ["parseResume", "pdfPageText"]);
+  ["parseResume", "pdfPageText", "resumeBlocks"]);
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
 
@@ -110,4 +110,34 @@ test("pdfPageText joins items on a line and breaks where the baseline moves", ()
     item("Next", 50, 640, 25),
   ]);
   assert.equal(text, "Riley Sample\nNetwork\nEnds here\n\nNext");
+});
+
+test("resumeBlocks: a resume's text as name, lines under it, headings, bullets and gaps", () => {
+  const b = resumeBlocks(fixture("resume-pasted.txt"));
+  assert.deepEqual(b.slice(0, 4), [
+    { t: "name", s: "JORDAN EXAMPLE" },
+    { t: "sub", s: "Systems Administrator | Hybrid Cloud, Identity and Automation" },
+    { t: "sub", s: "Example City, BC | 555-0100 | jordan@example.com | linkedin.com/in/jordan-example" },
+    { t: "gap" },
+  ]);
+  assert.deepEqual(b.filter((x) => x.t === "heading").map((x) => x.s),
+    ["SUMMARY", "SKILLS", "EXPERIENCE", "EDUCATION", "CERTIFICATIONS"]);
+  assert.equal(b.filter((x) => x.t === "bullet").length, 6);
+  assert.equal(b.find((x) => x.t === "bullet").s, "Run 140 virtual servers across two sites and an Azure tenant for 600 staff.");
+  assert.deepEqual(b[b.length - 1], { t: "line", s: "Azure Administrator Associate" });
+});
+
+test("resumeBlocks: other headings, dash bullets, no lines under the name, nothing at all", () => {
+  const b = resumeBlocks("\n\nCasey Placeholder\nLINE COOK\ncasey@example.com\nSELECTED PROJECTS\n- Built a fictional thing.\n\n\nWork Experience:\nLine Cook\n");
+  assert.deepEqual(b, [
+    { t: "name", s: "Casey Placeholder" },
+    { t: "sub", s: "LINE COOK" },                           // capitals right under the name: a headline
+    { t: "sub", s: "casey@example.com" },
+    { t: "heading", s: "SELECTED PROJECTS" },              // capitals, though the reader doesn't know it
+    { t: "bullet", s: "Built a fictional thing." },
+    { t: "gap" },                                           // one gap for a run of blank lines
+    { t: "heading", s: "Work Experience" },
+    { t: "line", s: "Line Cook" },
+  ]);
+  assert.deepEqual(resumeBlocks(" \n "), []);
 });
