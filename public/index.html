@@ -551,6 +551,17 @@ function normItems(coll, list){
   }).sort(function(a, b){ var x = a[def.order], y = b[def.order]; return x < y ? -1 : x > y ? 1 : 0; });
 }
 function itemById(coll, id){ return state[coll].filter(function(r){ return r.id === id; })[0]; }
+/* What an export file holds, in today's shape, from any version so far:
+   {jobs, profile (or null), and each collection in ITEMS}. Throws when the
+   file is not a backup. Old exports must keep reading the same way:
+   tests/backups.test.js checks one from every version. */
+function readBackup(parsed){
+  if(!parsed || typeof parsed !== "object" || !Array.isArray(parsed.jobs)) throw new Error("not a backup");
+  var out = {jobs: normalize({jobs: JSON.parse(JSON.stringify(parsed.jobs))}).jobs,
+    profile: profileHasText(parsed.profile) ? normProfile(parsed.profile) : null};
+  Object.keys(ITEMS).forEach(function(c){ out[c] = normItems(c, parsed[c]); });
+  return out;
+}
 /* A profile document, with its text fields as strings, or null for none. */
 function normProfile(p){
   if(!p || typeof p !== "object" || Array.isArray(p)) return null;
@@ -1518,26 +1529,24 @@ function loadFile(file){
   var r = new FileReader();
   r.onload = function(){
     try{
-      var parsed = JSON.parse(r.result);
-      if(!parsed || !Array.isArray(parsed.jobs)) throw new Error("no jobs");
-      var incoming = normalize(parsed).jobs;
+      var got = readBackup(JSON.parse(r.result)), incoming = got.jobs;
       incoming.forEach(function(j){
         var at = -1;
         state.jobs.forEach(function(x, i){ if(x.id === j.id) at = i; });
         if(at >= 0) state.jobs[at] = j; else state.jobs.push(j);
         create(j);
       });
-      var withProfile = profileHasText(parsed.profile);
-      if(withProfile) saveProfile(normProfile(parsed.profile));
+      var withProfile = !!got.profile;
+      if(withProfile) saveProfile(got.profile);
       // Versions never change, so only ones not here yet are added.
       var known = {};
       state.resumes.forEach(function(r){ known[r.id] = 1; });
-      var versions = normItems("resumes", parsed.resumes).filter(function(r){ return !known[r.id]; });
+      var versions = got.resumes.filter(function(r){ return !known[r.id]; });
       versions.forEach(function(r){ saveItem("resumes", r); });
       // Documents and guides change in place: a matching id is replaced, like a job.
       var others = {documents:0, guides:0};
       Object.keys(others).forEach(function(coll){
-        normItems(coll, parsed[coll]).forEach(function(r){ saveItem(coll, r); others[coll]++; });
+        got[coll].forEach(function(r){ saveItem(coll, r); others[coll]++; });
       });
       ui.sel = null; renderAll();
       var parts = [incoming.length + " postings"];
