@@ -150,6 +150,23 @@ in the page, saves a new one.
 | `text` | string | The whole resume as plain text. |
 | `notes` | string | Claude's notes: what changed and why, and anything worth adding that it can't know. `""` for the owner's own versions. |
 
+### Resume text
+
+The resume PDF reads its structure from the plain text, the way the letter's
+does:
+
+- The first line is the name, set large and bold, and used in the PDF
+  filename. The lines right under it (headline, contact line) are set small
+  and grey, up to the first blank line, heading or bullet; then a rule.
+- A heading is one the resume reader knows ("Experience", "Skills",
+  "Education" and so on, any case, with or without a colon) or a short line
+  in capitals. It is set bold in capitals with a light rule under it.
+- A line starting with a bullet mark (`•`, `-`, `*` and similar) is a bullet,
+  set with a hanging indent. Other lines wrap as plain text. A blank line
+  adds a little space.
+- It keeps to one page when one of three type settings fits, and otherwise
+  runs onto a second page, never leaving a heading at the bottom of a page.
+
 Claude adds a version with ArtifactData `set` on a new id. It never changes or
 deletes a version, and never changes the profile's `resume` while polishing.
 

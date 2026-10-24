@@ -1267,6 +1267,80 @@ function makePdf(j, text){
         "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
 }
 
+/* A resume lays out in a plainer type than the letter, and may run to a
+   second page: the tighter sets are tried first to keep it to one, then it
+   spills at the most readable set. */
+var RESUME_METRICS = [
+  {size:10.5, lead:14,   gap:7, head:14, margin:54, name:20},
+  {size:10,   lead:13,   gap:6, head:12, margin:48, name:19},
+  {size:9.5,  lead:12.2, gap:5, head:11, margin:44, name:18}
+];
+function layoutResume(doc, blocks, m){
+  var W = 612 - m.margin*2, y = m.margin, ops = [];
+  function wrap(s, x, w, style){
+    doc.setFont("helvetica", style || "normal").setFontSize(m.size);
+    doc.splitTextToSize(s, w).forEach(function(t){ ops.push({t:"text", s:t, x:x, y:y, size:m.size, style:style}); y += m.lead; });
+  }
+  blocks.forEach(function(b, i){
+    var next = blocks[i+1];
+    if(b.t === "name"){
+      ops.push({t:"text", s:b.s, x:m.margin, y:y + m.name*0.2, size:m.name, style:"bold"});
+      y += m.name + 2;
+    } else if(b.t === "sub"){
+      doc.setFont("helvetica", "normal").setFontSize(m.size - 1);
+      doc.splitTextToSize(b.s, W).forEach(function(t){ ops.push({t:"text", s:t, x:m.margin, y:y, size:m.size - 1, grey:true}); y += m.lead - 1; });
+      if(!next || next.t !== "sub"){ y += 2; ops.push({t:"rule", x:m.margin, y:y, w:W}); y += m.head; }
+    } else if(b.t === "heading"){
+      if(i && blocks[i-1].t !== "gap" && blocks[i-1].t !== "sub") y += m.gap;
+      ops.push({t:"text", s:b.s.toUpperCase(), x:m.margin, y:y, size:m.size, style:"bold", keep:true});
+      y += 3;
+      ops.push({t:"rule", x:m.margin, y:y, w:W, light:true});
+      y += m.lead;
+    } else if(b.t === "bullet"){
+      ops.push({t:"text", s:"•", x:m.margin + 2, y:y, size:m.size});
+      wrap(b.s, m.margin + 13, W - 13);
+    } else if(b.t === "line"){
+      wrap(b.s, m.margin, W);
+    } else y += m.gap;
+  });
+  return {ops:ops, height:y, margin:m.margin};
+}
+function makeResumePdf(text, name){
+  var blocks = resumeBlocks(text);
+  if(!blocks.length){ toast("Nothing to export", true); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    toast("PDF library did not load — copy the text instead", true); return;
+  }
+  var doc = new window.jspdf.jsPDF({unit:"pt", format:"letter"}), laid = null;
+  for(var i=0;i<RESUME_METRICS.length;i++){
+    laid = layoutResume(doc, blocks, RESUME_METRICS[i]);
+    if(laid.height <= 792 - laid.margin) break;                 // fits one page
+  }
+  if(laid.height > 792 - laid.margin) laid = layoutResume(doc, blocks, RESUME_METRICS[0]);
+
+  var pageBottom = 792 - laid.margin, offsetY = 0;
+  laid.ops.forEach(function(op){
+    var y = op.y - offsetY;
+    // A heading never ends a page: it moves over with the lines under it.
+    if(y > pageBottom || (op.keep && y + 3*RESUME_METRICS[0].lead > pageBottom)){
+      doc.addPage();
+      offsetY = op.y - laid.margin;
+      y = laid.margin;
+    }
+    if(op.t === "rule"){
+      doc.setDrawColor(op.light ? 200 : 160).setLineWidth(op.light ? .5 : .8).line(op.x, y, op.x + op.w, y);
+    } else {
+      doc.setFont("helvetica", op.style || "normal").setFontSize(op.size).setTextColor(op.grey ? 80 : 0);
+      doc.text(op.s, op.x, y);
+    }
+  });
+  doc.setTextColor(0);
+  var who = String(blocks[0].s).replace(/[^A-Za-z0-9]+/g, "");
+  var slug = String(name || "").replace(/[^A-Za-z0-9]+/g, "");
+  offer((who ? who + "_" : "") + "Resume" + (slug ? "_" + slug : "") + ".pdf", doc.output("blob"),
+        "PDF saved (" + doc.getNumberOfPages() + " page" + (doc.getNumberOfPages()>1?"s":"") + ")");
+}
+
 /* ============================ save / load ============================ */
 var downloadsCap = null, capReady = false;
 if(window.claude && window.claude.use){
@@ -1727,6 +1801,33 @@ function parseResume(text){
     s = (s ? s[0] : sec.summary[0]).trim();
     if(s.length <= 160) out.headline = s;
   }
+  return out;
+}
+/* Resume text as blocks for the PDF: the name (the first line), the lines
+   right under it, then headings, bullets and plain lines, with a gap for each
+   run of blank lines. A heading is one the reader knows or a short line in
+   capitals. */
+function resumeBlocks(text){
+  var lines = String(text || "").replace(/\r/g, "").split("\n").map(function(l){
+    return l.replace(/\s+/g, " ").trim();
+  });
+  var out = [], i = 0;
+  while(i < lines.length && !lines[i]) i++;
+  if(i >= lines.length) return out;
+  function heading(l){ return resumeHeading(l) || /^[A-Z][A-Z &\/'-]{3,39}$/.test(l); }
+  out.push({t:"name", s:lines[i++]});
+  // A line in capitals straight under the name is a headline, not a heading.
+  for(; i < lines.length && lines[i] && !resumeHeading(lines[i]) && !BULLET.test(lines[i])
+        && !(out.length > 1 && heading(lines[i])); i++) out.push({t:"sub", s:lines[i]});
+  for(; i < lines.length; i++){
+    var l = lines[i], last = out[out.length-1];
+    if(!l){ if(last.t !== "gap") out.push({t:"gap"}); continue; }
+    if(BULLET_ONLY.test(l)) continue;
+    if(heading(l)) out.push({t:"heading", s:l.replace(/:$/, "")});
+    else if(BULLET.test(l)) out.push({t:"bullet", s:l.replace(BULLET, "")});
+    else out.push({t:"line", s:l});
+  }
+  while(out[out.length-1].t === "gap") out.pop();
   return out;
 }
 /* One page of pdf.js text items as lines: a new line wherever the baseline
