@@ -19,7 +19,9 @@ You don't need a GitHub account or any programming tools.
 
 Your copy of Seed Change lives in **your own** Claude account. Nobody else can
 see your jobs, notes or cover letters, including the person who wrote this
-tool, unless you share the page's link with them yourself.
+tool. Its database is set so that only you can read it, so even if you share
+the page's link, other people can't see your data or your
+references' contact details.
 
 ## Step 1: Install the Claude app
 
@@ -41,8 +43,9 @@ Copy this message, paste it into the Code tab, and press Enter:
 
 > Please set up Seed Change for me. Download the project from
 > https://github.com/Itzafineday/application-desk into this folder, then
-> publish `public/index.html` as a private artifact with the `db` and
-> `downloads` capabilities, following the project's README. Give me the link
+> publish `public/index.html` as a private artifact with the `db`
+> capability limited to me (only the owner can read or write it) and the
+> `downloads` capability, following the project's README. Give me the link
 > when it's done, and explain anything you need me to approve in plain
 > language.
 
