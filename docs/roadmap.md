@@ -22,6 +22,7 @@ artifact's shared database.
 | 2026-10-15 | c7b14a1 | 6 | Indeed pastes (search-results layout) and duplicate checks across sites. Job data checked identical before and after. |
 | (not logged) | f7e8dad | 1792095823-dee4 | Indeed share links and the job's own page. Found live on 2026-10-22, matching `main` byte for byte. |
 | 2026-10-24 | 99da90f | 7 (1792880659-141d) | v4 and the Seed Change name: Get started (resume import into `profile/me`) and Help me apply (`form` on jobs). Additive fields, no migration. Job data checked identical before and after (132 jobs). |
+| 2026-10-25 | a237805 (v4.1.0) | 8 (1792909171-7fd5) | Resume versions, documents, guides, About dialog and feedback links. New collections only, no migration; capabilities carried forward. Jobs (132) and profile checked identical before and after. |
 
 ## Next: v4 (queued 2026-10-23)
 Rule for all of it: the main screen stays as it is. New features live behind
@@ -46,8 +47,8 @@ rarely use don't clutter the page.
 
 ### v4 status
 
-First slice deployed 2026-10-24 (see Deploys). The resume polisher, documents
-and guides are built and not deployed yet.
+First slice deployed 2026-10-24; the resume polisher, documents and guides
+deployed 2026-10-25 as v4.1.0 (see Deploys).
 
 | # | Built | Still to do |
 |---|---|---|
