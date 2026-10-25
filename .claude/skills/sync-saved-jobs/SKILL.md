@@ -25,8 +25,15 @@ Change as new `queued` jobs. It only reads the job sites and only adds jobs.
 
 ## Before you start
 
-- Seed Change's artifact URL and the backup folder are in `CLAUDE.local.md`. The
-  collection is `jobs`. Read `docs/schema.md` if you haven't.
+- Seed Change's artifact URL and the backup folder are in `CLAUDE.local.md`.
+  If there is no such file (a new user's copy), ask the person for their page's
+  claude.ai/artifact/ link, and use a **Seed Change backups** folder next to
+  the project (make it if needed; it is the same folder the update skill
+  uses). Offer to save both in a new `CLAUDE.local.md`, which is gitignored,
+  so they aren't asked again. The collection is `jobs`. Read
+  `docs/schema.md` if you haven't.
+- If the Claude in Chrome tools don't load, ask the person to install the
+  extension and connect it (`docs/SETUP.md`, Step 6), then try again.
 - Browse with Claude in Chrome (`mcp__claude-in-chrome__*`): load
   `tabs_context_mcp`, `tabs_create_mcp`, `navigate`, `get_page_text`,
   `javascript_tool`, `browser_batch` and `tabs_close_mcp` in one ToolSearch
