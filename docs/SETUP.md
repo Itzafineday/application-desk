@@ -11,6 +11,11 @@ About 15 minutes.
 - **A computer** running Windows or macOS.
 - **A paid Claude plan** (Pro or Max). Seed Change keeps your jobs in a small
   database attached to a Claude page, and free plans don't include that.
+  No account yet? [Sign up with this invite](https://claude.ai/referral/9HvNfl27wQ)
+  for a free week of Claude. When the week ends, choose **Pro** (about US$20 a
+  month; cancel any time in Settings, Billing). On the free plan already? Try
+  the invite first; if it's only for new accounts, upgrade to Pro in
+  claude.ai, Settings, Billing.
 - **The Claude desktop app.** Step 1 covers installing it.
 
 You don't need a GitHub account or any programming tools.
