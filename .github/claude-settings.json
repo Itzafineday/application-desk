@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Read(//proc/**)",
+      "Read(//sys/**)",
+      "Read(//etc/**)",
+      "Read(//run/**)",
+      "Read(//var/**)",
+      "Read(//tmp/**)",
+      "Read(//home/runner/.claude/**)",
+      "Read(//home/runner/.config/**)",
+      "Read(//home/runner/work/_temp/**)",
+      "Read(./.git/**)",
+      "Edit(./.git/**)",
+      "Edit(./.github/**)",
+      "Edit(./.githooks/**)",
+      "Edit(./.claude/**)",
+      "Edit(//home/runner/.claude/**)",
+      "Edit(//home/runner/.config/**)",
+      "Edit(//home/runner/work/_temp/**)",
+      "Edit(//tmp/**)"
+    ]
+  }
+}
