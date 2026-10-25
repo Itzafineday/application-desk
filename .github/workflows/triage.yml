@@ -14,8 +14,10 @@ on:
   issues:
     types: [opened, labeled]
 
+# Only runs that triage share a group: adding another label (the issue form
+# adds "bug" as the issue opens) must not cancel the triage in progress.
 concurrency:
-  group: triage-${{ github.event.issue.number }}
+  group: triage-${{ github.event.issue.number }}-${{ github.event.action == 'opened' || github.event.label.name == 'triage' }}
   cancel-in-progress: true
 
 jobs:
