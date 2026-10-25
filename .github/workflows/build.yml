@@ -18,8 +18,10 @@ on:
   issues:
     types: [labeled]
 
+# Other labels get their own group, so a label added straight after
+# "approved" can't replace the waiting build.
 concurrency:
-  group: build-${{ github.event.issue.number }}
+  group: build-${{ github.event.issue.number }}-${{ github.event.label.name == 'approved' }}
 
 jobs:
   make:
