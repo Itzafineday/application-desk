@@ -85,13 +85,29 @@ green dot and **Synced with Claude**.
 You can also paste just the job's link. Claude can fill in the details later.
 If the job is already saved, it tells you rather than adding it twice.
 
-**Or let Claude collect them.** If you have the Claude browser extension
-(Claude in Chrome), click **Save** on jobs you like on LinkedIn or Indeed,
-then tell Claude in the Code tab: "Pull my saved Indeed jobs into Seed
-Change." Claude opens your saved list in your browser, reads each
-posting, and adds the ones that aren't in Seed Change yet. It only reads the
-job sites; it doesn't apply or change anything there. Use a browser profile
-where you're signed in to your own job-site account.
+## Step 6 (optional): Let Claude collect your saved jobs
+
+If you click **Save** on jobs you like on LinkedIn or Indeed, Claude can pick
+them up for you. Neither site lets apps read your saved jobs directly, so
+Claude reads them the way you would: in your own Chrome, through the Claude in
+Chrome extension. It never sees your job-site passwords.
+
+1. In **Google Chrome** (other browsers don't work), open the Chrome Web
+   Store, search for **Claude**, and add the extension made by Anthropic.
+2. Click its icon, sign in with the same Claude account as the app, and allow
+   the permissions it asks for. Pin it to the toolbar so it's easy to find.
+3. In that same Chrome, sign in to **LinkedIn** and **Indeed** as usual.
+4. In the Claude app, open the Code tab in your Seed Change folder and say:
+   "Pull my saved LinkedIn and Indeed jobs into Seed Change." If Claude says
+   it can't reach your browser, type `/chrome` and follow its prompt, or turn
+   on **Claude in Chrome** under Settings, Connectors.
+
+What happens next: Claude opens a new tab, reads your Saved lists, skips the
+jobs Seed Change already has, and copies each new posting's text. It backs up
+your jobs, shows you what it will add, and adds them as **Queued** only when
+you say go. It only reads the job sites: it never applies, saves, unsaves or
+messages anyone there. If a site asks you to sign in or to prove you're human,
+Claude stops and asks you to do it.
 
 ## Using it day to day
 
