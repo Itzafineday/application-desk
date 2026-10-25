@@ -6,6 +6,12 @@ few prompts, and you get your own private job tracker.
 
 About 15 minutes.
 
+**Prefer one step at a time?** The same steps are in an
+[interactive setup guide](https://claude.ai/artifact/PNT4nNwMgkUz3xradGa6j3):
+one card per step, a check at the end of each, and a **Raise a hand** button
+on every step if you get stuck. It remembers where you got to. This page has
+everything too, if you'd rather read it all at once.
+
 ## What you need
 
 - **A computer** running Windows or macOS.
