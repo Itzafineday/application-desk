@@ -28,12 +28,23 @@ Users' pages: "Update my Seed Change" (docs/UPDATING.md)
      (Limits), and create an API key in that workspace. In the repo, open
      Settings, then Secrets and variables, then Actions, and add a repository
      secret `ANTHROPIC_API_KEY`. Billed per use.
-   - **Workload identity federation** (no key to leak). In the Console,
-     create a federation rule that trusts GitHub Actions for this repo, then
-     add two repository *variables* (same page, Variables tab):
-     `ANTHROPIC_FEDERATION_RULE_ID` (`fdrl_...`) and
-     `ANTHROPIC_ORGANIZATION_ID`. Each run then gets a short-lived token, so
-     there is no secret stored anywhere.
+   - **Workload identity federation** (no key to leak). In the Console, go
+     to Settings, Workload identity, Connect workload, GitHub Actions. Let
+     the wizard register GitHub's issuer (discovery mode), create a service
+     account, and create a rule that targets your workspace and matches only
+     this repo's main branch: subject prefix
+     `repo:<owner>/<repo>:ref:refs/heads/main`, audience
+     `https://api.anthropic.com`, and claims `repository_owner: <owner>` and
+     `ref: refs/heads/main`. The workflows run on issue events and Run
+     workflow from main, which both carry that subject, while pull requests
+     and other branches don't match. Then add four repository *variables*
+     (same page, Variables tab): `ANTHROPIC_FEDERATION_RULE_ID` (`fdrl_...`),
+     `ANTHROPIC_ORGANIZATION_ID` (Settings, Organization),
+     `ANTHROPIC_SERVICE_ACCOUNT_ID` (`svac_...`) and
+     `ANTHROPIC_WORKSPACE_ID` (`wrkspc_...`). Each run then gets a token that
+     lasts minutes, so there is no secret stored anywhere. If a run fails
+     with "Authentication failed", the Workload identity page's History tab
+     says which check didn't match.
 
    To use a Claude subscription instead, run `claude setup-token` locally,
    save the token as `CLAUDE_CODE_OAUTH_TOKEN`, and in the three workflows
