@@ -27,7 +27,8 @@ set up Seed Change, and send:
 
 Claude will:
 
-1. Get the latest release of the project.
+1. Get the latest release of the project (or the newest code, if there's
+   no release yet).
 2. Back up everything in your page to a dated file in a **Seed Change
    backups** folder next to the project. Keep that folder private: it holds
    your letters and your references' contact details.

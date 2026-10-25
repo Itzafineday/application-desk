@@ -26,7 +26,11 @@ In the project folder: if it is a git clone, `git fetch --tags` and check out
 the latest release tag (`git describe --tags --abbrev=0 origin/main`, or the
 newest `v*` tag); otherwise download the latest release from
 https://github.com/Itzafineday/application-desk/releases/latest into a new
-folder. Note its `APP_VERSION` from `public/index.html`.
+folder. If the project has no releases yet, use `main` instead (`git fetch
+origin main` and check out `origin/main`, or download
+https://github.com/Itzafineday/application-desk/archive/refs/heads/main.zip),
+and tell the person you're updating to the newest code rather than a release.
+Note its `APP_VERSION` from `public/index.html`.
 
 ## 2. Read the live page
 
