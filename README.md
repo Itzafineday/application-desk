@@ -87,7 +87,12 @@ New to all this? [docs/SETUP.md](docs/SETUP.md) walks through it step by step,
 no GitHub or coding needed.
 
 Ask Claude to publish `public/index.html` as an artifact with the `db` and
-`downloads` capabilities (where your plan offers artifact databases). Open it,
+`downloads` capabilities (where your plan offers artifact databases), with the
+database limited to its owner:
+`capabilities: { db: { rules: [ { path: "", read: "owner", write: "owner" } ] }, downloads: true }`.
+Without that rule, anyone the page is shared with can read its data,
+references' contact details included. Later updates leave `capabilities` out,
+so the rule carries forward. Open it,
 paste a few postings, then ask Claude in chat to score them or draft a letter,
 pointing it at [docs/schema.md](docs/schema.md) for the fields. Use **Export
 backup** now and then; [scripts/pack-backup.js](scripts/pack-backup.js) turns a
