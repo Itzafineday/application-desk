@@ -23,6 +23,7 @@ artifact's shared database.
 | (not logged) | f7e8dad | 1792095823-dee4 | Indeed share links and the job's own page. Found live on 2026-10-22, matching `main` byte for byte. |
 | 2026-10-24 | 99da90f | 7 (1792880659-141d) | v4 and the Seed Change name: Get started (resume import into `profile/me`) and Help me apply (`form` on jobs). Additive fields, no migration. Job data checked identical before and after (132 jobs). |
 | 2026-10-25 | a237805 (v4.1.0) | 8 (1792909171-7fd5) | Resume versions, documents, guides, About dialog and feedback links. New collections only, no migration; capabilities carried forward. Jobs (132) and profile checked identical before and after. |
+| 2026-10-25 | a237805 (v4.1.0) | 9 (1792912870-e1dc) | Same code; set the owner-only database rule (`db.rules`: root read and write `owner`). Checked: the owner still lists 132 jobs; view and editor levels read nothing. |
 
 ## Next: v4 (queued 2026-10-23)
 Rule for all of it: the main screen stays as it is. New features live behind
@@ -65,13 +66,10 @@ Before deploying these:
   and the page reads an empty one as "none yet".
 - Have the daily backup task list the new collections and pass
   `--resumes`, `--documents` and `--guides` (see Backups in AGENTS.md).
-- **Decide who can read the data.** By default anyone the page is shared
-  with, even view-only, can read its database, which will now hold
-  references' phone numbers and emails. Unshared, it is private. To keep it
-  private even if the link is shared, publish once with
-  `capabilities: { db: { rules: [ { path: "", read: "owner", write: "owner" } ] }, downloads: true }`;
-  later deploys leave `capabilities` out and the rule carries forward. This
-  changes the published page's settings, so it needs the owner's OK.
+- **Who can read the data:** done 2026-10-25. The page's database is
+  owner-only (`capabilities: { db: { rules: [ { path: "", read: "owner", write: "owner" } ] }, downloads: {} }`),
+  so sharing the link never shares the data. Later deploys leave
+  `capabilities` out and the rule carries forward.
 
 ## Later
 - A hosted store (for example Firestore, or Azure Static Web Apps with Cosmos DB)
