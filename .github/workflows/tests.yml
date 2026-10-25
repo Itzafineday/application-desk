@@ -1,12 +1,15 @@
 # Runs the repo's tests (node --test) on every pull request and on main, so a
 # change that breaks the paste parser, the resume reader, the form splitter or
-# the scripts shows up red before it is merged. Nothing to install.
+# the scripts shows up red before it is merged. Nothing to install. The build
+# workflow starts it by hand (workflow_dispatch) on the branches it pushes,
+# since its pull requests don't start workflows by themselves.
 name: Tests
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
